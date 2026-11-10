@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/api",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/((?!api|favicon\\.png|icons|manifest\\.json|flutter_bootstrap\\.js|main\\.dart\\.js|assets).*)",
+      "destination": "/index.html"
+    }
+  ]
+}
