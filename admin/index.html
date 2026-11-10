@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Admin — AI-Agent PiercingBlow</title>
+<style>
+  :root {
+    --bg: #0e1116; --card: #161b22; --line: #262d37; --text: #e6edf3;
+    --muted: #8b949e; --accent: #4f8cff; --green: #2ea043; --red: #f85149;
+    --orange: #d29922;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 24px 16px 64px; }
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  h1 { font-size: 18px; margin: 0; }
+  h1 small { display: block; color: var(--muted); font-size: 12px; font-weight: 400; }
+  h2 { font-size: 15px; margin: 0 0 12px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 18px; margin-bottom: 16px;
+  }
+  label { display: block; color: var(--muted); font-size: 12px; margin: 10px 0 4px; }
+  input[type=text], input[type=password], input[type=number], select {
+    width: 100%; padding: 9px 10px; border-radius: 8px;
+    border: 1px solid var(--line); background: #0d1117; color: var(--text);
+    font: inherit;
+  }
+  input:focus, select:focus { outline: 1px solid var(--accent); }
+  .row { display: flex; gap: 12px; }
+  .row > div { flex: 1; }
+  button {
+    padding: 9px 16px; border-radius: 8px; border: 1px solid var(--line);
+    background: #21262d; color: var(--text); font: inherit; cursor: pointer;
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.danger { color: var(--red); }
+  button:disabled { opacity: .5; cursor: default; }
+  .switch { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+  .switch input { width: 18px; height: 18px; accent-color: var(--accent); }
+  .status { margin-top: 10px; font-size: 13px; color: var(--muted); min-height: 18px; }
+  .status.ok { color: var(--green); }
+  .status.err { color: var(--red); }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); font-size: 13px; }
+  th { color: var(--muted); font-weight: 500; }
+  td input, td select { padding: 5px 6px; font-size: 13px; }
+  td input[type=number] { width: 100px; }
+  .pill { padding: 2px 8px; border-radius: 99px; font-size: 11px; }
+  .pill.active { background: rgba(46,160,67,.15); color: var(--green); }
+  .pill.banned { background: rgba(248,81,73,.15); color: var(--red); }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 6px; }
+  #login { max-width: 380px; margin: 12vh auto; }
+  #app { display: none; }
+  .actions { display: flex; gap: 6px; }
+  .mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div id="login" class="card">
+    <h2>Admin privat</h2>
+    <p class="hint">Halaman ini tidak ditautkan dari aplikasi. Masukkan admin key
+      (secret <span class="mono">ADMIN_KEY</span> di worker) untuk mengelola login
+      Discord, tier, dan akun.</p>
+    <label for="adminKey">Admin key</label>
+    <input type="password" id="adminKey" autocomplete="off" placeholder="ADMIN_KEY">
+    <div style="margin-top:12px">
+      <button class="primary" id="loginBtn" style="width:100%">Masuk</button>
+    </div>
+    <div class="status" id="loginStatus"></div>
+  </div>
+
+  <div id="app">
+    <header>
+      <h1>AI-Agent PiercingBlow <small>Dashboard admin privat</small></h1>
+      <button id="logoutBtn">Keluar</button>
+    </header>
+
+    <div class="card">
+      <h2>Login Discord (OAuth)</h2>
+      <div class="switch">
+        <input type="checkbox" id="dsEnabled">
+        <span>Aktifkan login Discord di aplikasi</span>
+      </div>
+      <div class="row">
+        <div>
+          <label for="dsClientId">Client ID (Application ID)</label>
+          <input type="text" id="dsClientId" placeholder="123456789012345678">
+        </div>
+        <div>
+          <label for="dsSecret">Client Secret</label>
+          <input type="password" id="dsSecret" autocomplete="new-password"
+                 placeholder="Kosongkan = tidak diubah">
+        </div>
+      </div>
+      <label for="dsRedirect">Redirect URI</label>
+      <input type="text" id="dsRedirect" placeholder="https://www.piercingblow.ai.id/">
+      <div class="hint">Harus sama persis dengan yang didaftarkan di Discord Developer
+        Portal → OAuth2 → Redirects. Kosong = otomatis pakai origin situs ini.
+        Secret disimpan di server (KV) dan tidak pernah dikirim ke browser user.</div>
+      <div style="margin-top:12px">
+        <button class="primary" id="saveDiscord">Simpan konfigurasi Discord</button>
+      </div>
+      <div class="status" id="discordStatus"></div>
+    </div>
+
+    <div class="card">
+      <h2>Tier &amp; kuota token</h2>
+      <div class="row">
+        <div>
+          <label for="tiers">Daftar tier (pisahkan dengan koma)</label>
+          <input type="text" id="tiers" placeholder="free, pro, vip">
+        </div>
+        <div>
+          <label for="defaultTier">Tier default akun baru</label>
+          <select id="defaultTier"></select>
+        </div>
+        <div>
+          <label for="tokenResetDays">Durasi reset token (hari)</label>
+          <input type="number" id="tokenResetDays" min="1" step="1" placeholder="1">
+        </div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <div>
+          <label for="guestTokens">Token tanpa login (Guest)</label>
+          <input type="number" id="guestTokens" min="0" step="100000" placeholder="10000000">
+          <div class="hint">Default: 10.000.000 (10M).</div>
+        </div>
+        <div>
+          <label for="loginTokens">Token login Discord</label>
+          <input type="number" id="loginTokens" min="0" step="100000" placeholder="20000000">
+          <div class="hint">Default: 20.000.000 (20M, bonus +10M saat login).</div>
+        </div>
+      </div>
+      <div style="margin-top:12px">
+        <button class="primary" id="saveTiers">Simpan kuota &amp; tier</button>
+      </div>
+      <div class="status" id="tierStatus"></div>
+    </div>
+
+    <div class="card">
+      <h2>API Bot Discord (Verifikasi Akun)</h2>
+      <p class="hint">Endpoint ini dipanggil oleh Bot Discord untuk memverifikasi apakah member Discord telah login/terhubung di web, serta memeriksa tier dan kuota tokennya.</p>
+      <div class="row">
+        <div>
+          <label for="botSecretKey">Bot API Key (opsional — kosong = verifikasi publik tanpa auth header)</label>
+          <input type="password" id="botSecretKey" autocomplete="new-password" placeholder="Kosongkan = tanpa proteksi key">
+        </div>
+      </div>
+      <div style="margin-top:12px">
+        <button class="primary" id="saveBot">Simpan pengaturan bot</button>
+      </div>
+      <div class="status" id="botStatus"></div>
+
+      <label style="margin-top:14px">Contoh Endpoint Verifikasi Bot:</label>
+      <div style="background:#0d1117; padding:10px; border-radius:8px; border:1px solid var(--line); font-family:monospace; font-size:12px; word-break:break-all;">
+        GET https://www.piercingblow.ai.id/api/bot/verify?discord_id=123456789012345678
+      </div>
+      <div class="hint" style="margin-top:6px">Header (jika Bot API Key diset): <span class="mono">X-Bot-Key: &lt;kunci&gt;</span></div>
+
+      <details style="margin-top:10px; cursor:pointer;">
+        <summary style="color:var(--accent); font-size:13px; font-weight:500;">Lihat contoh kode bot (JavaScript &amp; Python)</summary>
+        <div style="margin-top:8px; font-size:12px; font-family:monospace; background:#0b0d11; padding:12px; border-radius:8px; overflow-x:auto;">
+<b>// discord.js (v14)</b><br>
+const res = await fetch(`https://www.piercingblow.ai.id/api/bot/verify?discord_id=${interaction.user.id}`, {<br>
+&nbsp;&nbsp;headers: { 'X-Bot-Key': 'KUNCI_BOT' }<br>
+});<br>
+const data = await res.json();<br>
+if (data.verified) {<br>
+&nbsp;&nbsp;await interaction.reply(`Akun terverifikasi! Tier: ${data.user.tier}, Sisa token: ${data.user.tokenRemaining}`);<br>
+} else {<br>
+&nbsp;&nbsp;await interaction.reply('Silakan login di web terlebih dahulu!');<br>
+}<br>
+<br>
+<b># discord.py</b><br>
+import aiohttp<br>
+async with aiohttp.ClientSession() as session:<br>
+&nbsp;&nbsp;async with session.get(f"https://www.piercingblow.ai.id/api/bot/verify?discord_id={ctx.author.id}", headers={"X-Bot-Key": "KUNCI_BOT"}) as r:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;data = await r.json()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if data.get("verified"):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;await ctx.send(f"Terverifikasi! Tier: {data['user']['tier']}")<br>
+        </div>
+      </details>
+    </div>
+
+    <div class="card">
+      <h2>Server AI lokal</h2>
+      <div class="row">
+        <div>
+          <label for="aiServerUrl">AI server URL (provider Local AI)</label>
+          <input type="text" id="aiServerUrl" placeholder="https://...">
+        </div>
+        <div>
+          <label for="localCloudKey">API key server lokal</label>
+          <input type="password" id="localCloudKey" autocomplete="new-password"
+                 placeholder="Kosongkan = tidak diubah">
+        </div>
+      </div>
+      <div class="hint">Dibaca aplikasi saat startup, jadi semua user otomatis
+        mengikuti alamat server yang diset di sini.</div>
+      <div style="margin-top:12px">
+        <button class="primary" id="saveServer">Simpan server</button>
+      </div>
+      <div class="status" id="serverStatus"></div>
+    </div>
+
+    <div class="card">
+      <h2>Akun</h2>
+      <div class="row">
+        <div>
+          <label for="newName">Nama akun baru</label>
+          <input type="text" id="newName" placeholder="nama user">
+        </div>
+        <div>
+          <label for="newDiscordId">Discord ID (opsional, untuk linking)</label>
+          <input type="text" id="newDiscordId" placeholder="123456789012345678">
+        </div>
+        <div>
+          <label for="newTier">Tier</label>
+          <select id="newTier"></select>
+        </div>
+        <div style="flex:0 0 auto; display:flex; align-items:flex-end">
+          <button class="primary" id="addAccount">Tambah</button>
+        </div>
+      </div>
+      <div class="status" id="accountsInfo"></div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Nama</th><th>Discord ID</th><th>Role</th><th>Tier</th>
+              <th>Token</th><th>Kredit</th><th>Status</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="accountRows"></tbody>
+        </table>
+      </div>
+      <div style="margin-top:12px">
+        <button id="refreshAccounts">Muat ulang akun</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+let adminKey = sessionStorage.getItem('pb_admin_key') || '';
+let config = null;
+
+function setStatus(el, msg, ok) {
+  el.textContent = msg;
+  el.className = 'status' + (ok === true ? ' ok' : ok === false ? ' err' : '');
+}
+
+async function api(method, path, body) {
+  const res = await fetch(path, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Admin-Key': adminKey,
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  let data = null;
+  try { data = await res.json(); } catch (_) {}
+  if (!res.ok) {
+    throw new Error((data && data.error) || ('HTTP ' + res.status));
+  }
+  return data;
+}
+
+function tierOptions(selected) {
+  const tiers = (config && config.tiers) || ['free'];
+  return tiers.map((t) =>
+    '<option value="' + escapeAttr(t) + '"' +
+    (t === selected ? ' selected' : '') + '>' + escapeHtml(t) + '</option>'
+  ).join('');
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+function escapeAttr(s) { return escapeHtml(s); }
+
+function fillTierSelects() {
+  const tiers = (config && config.tiers) || ['free'];
+  for (const id of ['defaultTier', 'newTier']) {
+    const el = $(id);
+    const current = id === 'defaultTier'
+      ? (config.defaultTier || tiers[0])
+      : (config.defaultTier || tiers[0]);
+    el.innerHTML = tierOptions(current);
+  }
+}
+
+async function loadConfig() {
+  config = await api('GET', '/api/admin/config');
+  $('dsEnabled').checked = !!config.discord.enabled;
+  $('dsClientId').value = config.discord.clientId || '';
+  $('dsSecret').value = '';
+  $('dsSecret').placeholder = config.discord.hasSecret
+    ? 'Tersimpan di server — kosongkan = tidak diubah'
+    : 'Belum diset';
+  $('dsRedirect').value = config.discord.redirectUri || '';
+  $('tiers').value = (config.tiers || []).join(', ');
+  $('tokenResetDays').value = config.tokenResetDays ?? 1;
+  $('guestTokens').value = config.guestTokenBalance ?? 10000000;
+  $('loginTokens').value = config.loginTokenBalance ?? 20000000;
+  $('botSecretKey').value = '';
+  $('botSecretKey').placeholder = config.hasBotSecret
+    ? 'Tersimpan — kosongkan = tidak diubah' : 'Kosongkan = tanpa proteksi key';
+  $('aiServerUrl').value = config.aiServerUrl || '';
+  $('localCloudKey').value = '';
+  $('localCloudKey').placeholder = config.localCloudKey
+    ? 'Tersimpan — kosongkan = tidak diubah' : 'Belum diset';
+  fillTierSelects();
+}
+
+function rowAccount(tr) {
+  const get = (f) => tr.querySelector('[data-f="' + f + '"]');
+  const existing = currentAccounts.find((a) => a.id === tr.dataset.id) || {};
+  return {
+    ...existing,
+    id: tr.dataset.id,
+    name: get('name').value.trim(),
+    discordId: get('discordId').value.trim(),
+    role: get('role').value,
+    tier: get('tier').value,
+    tokenBalance: Number(get('tokenBalance').value) || 0,
+    creditBalance: Number(get('creditBalance').value) || 0,
+  };
+}
+
+let currentAccounts = [];
+
+async function refreshAll() {
+  await loadConfig();
+  const data = await api('GET', '/api/admin/accounts');
+  currentAccounts = data.accounts || [];
+  renderAccounts();
+}
+
+function renderAccounts() {
+  const rows = currentAccounts.map((a) => {
+    return '<tr data-id="' + escapeAttr(a.id) + '">' +
+      '<td><input type="text" data-f="name" value="' + escapeAttr(a.name || '') + '"></td>' +
+      '<td><input type="text" data-f="discordId" value="' + escapeAttr(a.discordId || '') + '"></td>' +
+      '<td><select data-f="role">' +
+        '<option value="user"' + (a.role !== 'admin' ? ' selected' : '') + '>user</option>' +
+        '<option value="admin"' + (a.role === 'admin' ? ' selected' : '') + '>admin</option>' +
+      '</select></td>' +
+      '<td><select data-f="tier">' + tierOptions(a.tier || config.defaultTier) + '</select></td>' +
+      '<td><input type="number" data-f="tokenBalance" min="0" value="' + (a.tokenBalance ?? 0) + '"></td>' +
+      '<td><input type="number" data-f="creditBalance" min="0" step="0.01" value="' + (a.creditBalance ?? 0) + '"></td>' +
+      '<td><span class="pill ' + (a.status === 'banned' ? 'banned' : 'active') + '">' +
+        (a.status === 'banned' ? 'banned' : 'active') + '</span></td>' +
+      '<td><div class="actions">' +
+        '<button data-act="save">Simpan</button>' +
+        '<button data-act="ban">' + (a.status === 'banned' ? 'Unban' : 'Ban') + '</button>' +
+        '<button data-act="delete" class="danger">Hapus</button>' +
+      '</div></td>' +
+    '</tr>';
+  });
+  $('accountRows').innerHTML = rows.join('') ||
+    '<tr><td colspan="8" style="color:var(--muted)">Belum ada akun. Akun otomatis dibuat saat user login Discord.</td></tr>';
+  setStatus($('accountsInfo'), currentAccounts.length + ' akun', null);
+}
+
+async function showApp() {
+  $('login').style.display = 'none';
+  $('app').style.display = 'block';
+  await refreshAll();
+}
+
+$('loginBtn').addEventListener('click', async () => {
+  adminKey = $('adminKey').value.trim();
+  if (!adminKey) {
+    setStatus($('loginStatus'), 'Admin key wajib diisi.', false);
+    return;
+  }
+  try {
+    await api('GET', '/api/admin/health');
+    sessionStorage.setItem('pb_admin_key', adminKey);
+    await showApp();
+  } catch (e) {
+    setStatus($('loginStatus'), String(e.message || e), false);
+  }
+});
+
+$('logoutBtn').addEventListener('click', () => {
+  sessionStorage.removeItem('pb_admin_key');
+  adminKey = '';
+  location.reload();
+});
+
+$('saveDiscord').addEventListener('click', async () => {
+  const clientId = $('dsClientId').value.trim();
+  if (clientId && !/^\d+$/.test(clientId)) {
+    setStatus($('discordStatus'), 'Client ID harus angka (Discord Application ID).', false);
+    return;
+  }
+  try {
+    await api('PATCH', '/api/admin/config', {
+      discord: {
+        enabled: $('dsEnabled').checked,
+        clientId,
+        clientSecret: $('dsSecret').value.trim(),
+        redirectUri: $('dsRedirect').value.trim(),
+      },
+    });
+    await loadConfig();
+    setStatus($('discordStatus'), 'Konfigurasi Discord disimpan.', true);
+  } catch (e) {
+    setStatus($('discordStatus'), String(e.message || e), false);
+  }
+});
+
+$('saveTiers').addEventListener('click', async () => {
+  const tiers = $('tiers').value.split(',').map((t) => t.trim()).filter(Boolean);
+  if (tiers.length === 0) {
+    setStatus($('tierStatus'), 'Minimal satu tier.', false);
+    return;
+  }
+  const resetDays = Math.max(1, Number($('tokenResetDays').value) || 1);
+  const guestTokens = Math.max(0, Number($('guestTokens').value) || 10000000);
+  const loginTokens = Math.max(0, Number($('loginTokens').value) || 20000000);
+  try {
+    await api('PATCH', '/api/admin/config', {
+      tiers,
+      defaultTier: $('defaultTier').value,
+      tokenResetDays: resetDays,
+      guestTokenBalance: guestTokens,
+      loginTokenBalance: loginTokens,
+      defaultTokenBalance: loginTokens,
+    });
+    await loadConfig();
+    setStatus($('tierStatus'), 'Kuota token & tier berhasil disimpan.', true);
+  } catch (e) {
+    setStatus($('tierStatus'), String(e.message || e), false);
+  }
+});
+
+$('saveBot').addEventListener('click', async () => {
+  try {
+    await api('PATCH', '/api/admin/config', {
+      botSecretKey: $('botSecretKey').value.trim(),
+    });
+    await loadConfig();
+    setStatus($('botStatus'), 'Pengaturan API Bot Discord disimpan.', true);
+  } catch (e) {
+    setStatus($('botStatus'), String(e.message || e), false);
+  }
+});
+
+$('tiers').addEventListener('change', () => {
+  const tiers = $('tiers').value.split(',').map((t) => t.trim()).filter(Boolean);
+  if (tiers.length) {
+    config = { ...config, tiers };
+    fillTierSelects();
+  }
+});
+
+$('saveServer').addEventListener('click', async () => {
+  try {
+    const body = { aiServerUrl: $('aiServerUrl').value.trim() };
+    const key = $('localCloudKey').value.trim();
+    if (key) body.localCloudKey = key;
+    await api('PATCH', '/api/admin/config', body);
+    await loadConfig();
+    setStatus($('serverStatus'), 'Server disimpan.', true);
+  } catch (e) {
+    setStatus($('serverStatus'), String(e.message || e), false);
+  }
+});
+
+$('addAccount').addEventListener('click', async () => {
+  const name = $('newName').value.trim();
+  if (!name) {
+    setStatus($('accountsInfo'), 'Nama akun wajib diisi.', false);
+    return;
+  }
+  const id = 'acc_' + Date.now() + '_' + Math.floor(Math.random() * 65536);
+  try {
+    await api('POST', '/api/admin/accounts/' + encodeURIComponent(id), {
+      id,
+      name,
+      discordId: $('newDiscordId').value.trim(),
+      tier: $('newTier').value,
+      role: 'user',
+      tokenBalance: config.defaultTokenBalance ?? 0,
+      creditBalance: 0,
+      status: 'active',
+    });
+    $('newName').value = '';
+    $('newDiscordId').value = '';
+    const data = await api('GET', '/api/admin/accounts');
+    currentAccounts = data.accounts || [];
+    renderAccounts();
+    setStatus($('accountsInfo'), 'Akun "' + name + '" dibuat.', true);
+  } catch (e) {
+    setStatus($('accountsInfo'), String(e.message || e), false);
+  }
+});
+
+$('refreshAccounts').addEventListener('click', async () => {
+  try {
+    const data = await api('GET', '/api/admin/accounts');
+    currentAccounts = data.accounts || [];
+    renderAccounts();
+  } catch (e) {
+    setStatus($('accountsInfo'), String(e.message || e), false);
+  }
+});
+
+$('accountRows').addEventListener('click', async (ev) => {
+  const btn = ev.target.closest('button[data-act]');
+  if (!btn) return;
+  const tr = btn.closest('tr');
+  const id = tr.dataset.id;
+  const act = btn.dataset.act;
+  try {
+    if (act === 'delete') {
+      if (!confirm('Hapus akun ini?')) return;
+      await api('DELETE', '/api/admin/accounts/' + encodeURIComponent(id));
+    } else {
+      const account = rowAccount(tr);
+      if (act === 'ban') {
+        const existing = currentAccounts.find((a) => a.id === id);
+        account.status = existing && existing.status === 'banned' ? 'active' : 'banned';
+      }
+      await api('POST', '/api/admin/accounts/' + encodeURIComponent(id), account);
+    }
+    const data = await api('GET', '/api/admin/accounts');
+    currentAccounts = data.accounts || [];
+    renderAccounts();
+    setStatus($('accountsInfo'),
+      act === 'delete' ? 'Akun dihapus.' : 'Akun diperbarui.', true);
+  } catch (e) {
+    setStatus($('accountsInfo'), String(e.message || e), false);
+  }
+});
+
+$('adminKey').addEventListener('keydown', (ev) => {
+  if (ev.key === 'Enter') $('loginBtn').click();
+});
+
+if (adminKey) {
+  api('GET', '/api/admin/health')
+    .then(showApp)
+    .catch(() => { sessionStorage.removeItem('pb_admin_key'); adminKey = ''; });
+}
+</script>
+</body>
+</html>
