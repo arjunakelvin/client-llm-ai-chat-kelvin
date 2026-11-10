@@ -3,6 +3,22 @@
   "version": 2,
   "rewrites": [
     {
+      "source": "/api/admin/:path*",
+      "destination": "/api/worker?kind=admin&path=:path*"
+    },
+    {
+      "source": "/api/auth/:path*",
+      "destination": "/api/worker?kind=auth&path=:path*"
+    },
+    {
+      "source": "/api/bot/:path*",
+      "destination": "/api/worker?kind=bot&path=:path*"
+    },
+    {
+      "source": "/api/discord/:path*",
+      "destination": "/api/worker?kind=discord&path=:path*"
+    },
+    {
       "source": "/api/((?!admin|auth|bot|discord).*)",
       "destination": "/api/index.js"
     },

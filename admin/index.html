@@ -113,6 +113,9 @@
       atau pasang route <span class="mono">piercingblow.ai.id/api*</span>.</div>
     <label for="adminKey">Admin key</label>
     <input type="password" id="adminKey" autocomplete="off" placeholder="ADMIN_KEY">
+    <div class="hint">Token disimpan di <span class="mono">sessionStorage</span>
+      browser ini saja — hilang kalau tab ditutup, tidak pernah disimpan
+      permanen dan tidak pernah dikirim ke pengguna aplikasi.</div>
     <div style="margin-top:12px">
       <button class="primary" id="loginBtn" style="width:100%">Masuk</button>
     </div>
@@ -718,6 +721,12 @@ $('loginBtn').addEventListener('click', async () => {
         + 'CORS. Isi "Worker URL" di atas dengan alamat Worker Cloudflare, '
         + 'atau set env WORKER_URL di project Vercel, atau pasang route '
         + 'piercingblow.ai.id/api* di Cloudflare.', false);
+    } else if (msg.includes('NOT_FOUND') || msg.includes('not found')) {
+      setStatus($('loginStatus'),
+        'Endpoint admin tidak ada (404). Worker belum mengambil alih /api di '
+        + 'jalankan "npx wrangler deploy" di folder proxy (route '
+        + 'piercingblow.ai.id/api* sudah dipasang), atau isi "Worker URL" '
+        + 'di atas.', false);
     } else if (msg.includes('ADMIN_KEY is not set')) {
       setStatus($('loginStatus'),
         'Worker belum punya ADMIN_KEY. Jalankan: wrangler secret put ADMIN_KEY',

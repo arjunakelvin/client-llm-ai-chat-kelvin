@@ -1,20 +1,22 @@
 /**
- * Forwarder untuk API backend PiercingBlow yang hosted di Cloudflare Worker.
+ * Forwarder API backend PiercingBlow ke Cloudflare Worker.
  *
  * Vercel hanya boleh menangani dua hal:
- *   - `/api`            → proxy CORS (api/index.js), dipakai web client untuk
+ *   - `/api`            -> proxy CORS (api/index.js), dipakai web client untuk
  *                         menembak provider OpenAI-compatible dari browser.
- *   - `/api/<apa saja>` → request ini diteruskan ke Worker, yang memegang
- *                         ADMIN_KEY + KV (admin dashboard, login Discord, bot).
+ *   - `/api/admin/*`    -> request ini diteruskan ke Worker, yang memegang
+ *     `/api/auth/*`       ADMIN_KEY + KV (admin dashboard, login Discord, bot).
+ *     `/api/bot/*`
+ *     `/api/discord/*`
  *
  * Tanpa file ini, rewrite `"/api/(.*)"` di vercel.json menelan semua
  * `/api/admin/*` dan dashboard admin hanya bisa menampilkan
- * "Missing target URL in query parameter \"url\"".
+ * "Missing target URL in query parameter \"url\"" atau 404.
  *
  * Set env var WORKER_URL di project Vercel, misal:
  *   WORKER_URL=https://piercingblow-api.<subdomain>.workers.dev
  *
- * Alternatif: pasang route Worker di Cloudflare untuk
+ * Alternatif (lebih bagus): pasang route Worker di Cloudflare untuk
  * `piercingblow.ai.id/api*` — kalau route itu aktif, request tidak pernah
  * sampai ke Vercel dan file ini tidak dipakai.
  */
@@ -46,19 +48,35 @@ module.exports = async (req, res) => {
     return;
   }
 
-  // `req.query.path` holds the catch-all segments; everything else is a real
-  // query parameter that has to reach the Worker untouched.
-  const raw = req.query.path;
-  const segments = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+  // Path asli datang dari rewrite: /api/admin/<...> -> /api/worker?kind=admin&path=<...>
+  const kind = (req.query.kind || '').toString();
+  const pathParam = (req.query.path || '').toString();
+  let path = '';
+  if (kind) {
+    path = '/' + kind + (pathParam ? '/' + pathParam : '');
+  } else if (pathParam) {
+    path = '/' + pathParam;
+  }
+
+  // Fallback kalau rewrite tidak menyertakan path-nya: ambil dari header
+  // yang dipakai Vercel untuk mencatat path asli.
+  if (!path) {
+    const fallback = req.headers['x-vercel-original-path']
+      || req.headers['x-invoke-path']
+      || req.headers['x-matched-path'];
+    const suffix = (req.url || '').split('?')[0].replace(/^\/api\/worker/, '');
+    path = suffix || (fallback || '').replace(/^\/api/, '');
+  }
+
   const query = { ...req.query };
+  delete query.kind;
   delete query.path;
   const queryString = Object.entries(query)
     .map(([key, value]) =>
       `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
     .join('&');
   const target =
-    `${WORKER_URL}/api/${segments.map(encodeURIComponent).join('/')}`
-    + (queryString ? `?${queryString}` : '');
+    `${WORKER_URL}/api${path}` + (queryString ? `?${queryString}` : '');
 
   const headers = {};
   for (const [key, value] of Object.entries(req.headers)) {
