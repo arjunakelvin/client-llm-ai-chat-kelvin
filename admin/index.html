@@ -147,11 +147,17 @@
       </div>
       <label for="dsRedirect">Redirect URI</label>
       <input type="text" id="dsRedirect" placeholder="https://piercingblow.ai.id/auth/discord">
+      <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+        <button id="copyRedirect">Copy URL untuk didaftarkan</button>
+        <span class="hint" id="redirectCurrent" style="margin:0"></span>
+      </div>
       <div class="hint">Harus sama persis dengan yang didaftarkan di Discord Developer
         Portal → OAuth2 → Redirects. Endpoint login web:
         <span class="mono">https://piercingblow.ai.id/auth/discord</span>
-        (default). Kosong = otomatis pakai endpoint itu.
-        Secret disimpan di server (KV) dan tidak pernah dikirim ke browser user.</div>
+        (default). <b>Jangan pakai URL lama</b> (<span class="mono">https://piercingblow.ai.id/</span>)
+        — Discord menolaknya kalau tidak terdaftar. Kosong = otomatis pakai
+        endpoint yang benar. Secret disimpan di server (KV) dan tidak pernah
+        dikirim ke browser user.</div>
       <div style="margin-top:12px">
         <button class="primary" id="saveDiscord">Simpan konfigurasi Discord</button>
       </div>
@@ -347,6 +353,9 @@ const $ = (id) => document.getElementById(id);
 let adminKey = sessionStorage.getItem('pb_admin_key') || '';
 let config = null;
 
+// Endpoint callback OAuth Discord yang harus didaftarkan di Discord Portal.
+const DEFAULT_REDIRECT_URI = window.location.origin + '/auth/discord';
+
 // Base API: defaultnya domain ini sendiri. Kalau /api di domain masih
 // ketahan proxy CORS, isi "Worker URL" untuk langsung menembak Worker.
 let workerUrl = localStorage.getItem('pb_worker_url') || '';
@@ -419,6 +428,9 @@ async function loadConfig() {
     ? 'Tersimpan di server — kosongkan = tidak diubah'
     : 'Belum diset';
   $('dsRedirect').value = config.discord.redirectUri || '';
+  $('redirectCurrent').textContent = config.discord.redirectUri
+    ? 'Server memakai: ' + config.discord.redirectUri
+    : 'Server memakai default: ' + DEFAULT_REDIRECT_URI;
   $('tiers').value = (config.tiers || []).join(', ');
   $('tokenResetDays').value = config.tokenResetDays ?? 1;
   $('guestTokens').value = config.guestTokenBalance ?? 10000000;
@@ -750,6 +762,17 @@ $('workerUrl').value = workerUrl;
 $('workerUrl').addEventListener('input', () => {
   workerUrl = $('workerUrl').value.trim();
   localStorage.setItem('pb_worker_url', workerUrl);
+});
+
+$('copyRedirect').addEventListener('click', async () => {
+  const value = $('dsRedirect').value.trim() || DEFAULT_REDIRECT_URI;
+  try {
+    await navigator.clipboard.writeText(value);
+    setStatus($('discordStatus'), 'Disalin: ' + value, true);
+  } catch (e) {
+    setStatus($('discordStatus'),
+      'Gagal menyalin otomatis — salin manual: ' + value, false);
+  }
 });
 
 $('logoutBtn').addEventListener('click', () => {
