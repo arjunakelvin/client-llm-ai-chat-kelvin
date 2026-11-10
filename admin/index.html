@@ -146,9 +146,11 @@
         </div>
       </div>
       <label for="dsRedirect">Redirect URI</label>
-      <input type="text" id="dsRedirect" placeholder="https://piercingblow.ai.id/">
+      <input type="text" id="dsRedirect" placeholder="https://piercingblow.ai.id/auth/discord">
       <div class="hint">Harus sama persis dengan yang didaftarkan di Discord Developer
-        Portal → OAuth2 → Redirects. Kosong = otomatis pakai origin situs ini.
+        Portal → OAuth2 → Redirects. Endpoint login web:
+        <span class="mono">https://piercingblow.ai.id/auth/discord</span>
+        (default). Kosong = otomatis pakai endpoint itu.
         Secret disimpan di server (KV) dan tidak pernah dikirim ke browser user.</div>
       <div style="margin-top:12px">
         <button class="primary" id="saveDiscord">Simpan konfigurasi Discord</button>
