@@ -146812,8 +146812,8 @@ s=q.gvj()
 r=q.a7+q.S.gk(0)+q.aM
 q.u.sk(0,r)
 q.aK.sk(0,B.b.au(s-r,0,s))
-q.Y.sk(0,A.kG(B.e.ae(q.ak+q.bC,6)))
-q.a2.sk(0,A.kG(B.e.ae(B.e.au(q.ab-q.bC,0,1/0),6)))},
+q.Y.sk(0,A.kG(B.e.ae(q.ak+q.bC,8)))
+q.a2.sk(0,A.kG(B.e.ae(B.e.au(q.ab-q.bC,0,1/0),8)))},
 yu(){var s=0,r=A.A(t.H),q=this,p,o,n
 var $async$yu=A.w(function(a,b){if(a===1)return A.x(b,r)
 for(;;)switch(s){case 0:n=q.aK
@@ -148960,35 +148960,35 @@ break}case 1:return A.y(q,r)}})
 return A.z($async$A6,r)},
 uv(a,b,c,d,e,f,g,h,i,j){return this.aXp(a,b,c,d,e,f,g,h,i,j)},
 afM(a,b,c,d,e,f,g,h){return this.uv(null,a,b,c,d,e,null,f,g,h)},
-aXp(c3,c4,c5,c6,c7,c8,c9,d0,d1,d2){var s=0,r=A.A(t.N),q,p=2,o=[],n=[],m=this,l,k,j,i,h,g,f,e,d,c,b,a,a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,b0,b1,b2,b3,b4,b5,b6,b7,b8,b9,c0,c1,c2
-var $async$uv=A.w(function(d4,d5){if(d4===1){o.push(d5)
-s=p}for(;;)switch(s){case 0:b9=A.bzJ("POST",A.di(c4,0,null))
-c0=b9.r
-c1=t.N
-c2=A.q(c1,c1)
-c2.h(0,"Authorization","Bearer "+(c3==null?m.gps():c3))
-c2.h(0,"Content-Type","application/json")
-c2.h(0,"Accept","text/event-stream")
-c2.E(0,c5)
-c0.E(0,c2)
-c0=c9==null?m.gpB():c9
-c2=m.a6X(c8,c6)
-b4=t.K
-J.bO5(b9,B.a9.kL(A.t(["model",c0,"messages",c2,"temperature",0.7,"max_tokens",4096,"stream",!0],c1,b4),null))
-b5=A.bsR()
-l=b5==null?new A.wc(A.b([],t.O)):b5
+aXp(c7,c8,c9,d0,d1,d2,d3,d4,d5,d6){var s=0,r=A.A(t.N),q,p=2,o=[],n=[],m=this,l,k,j,i,h,g,f,e,d,c,b,a,a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,b0,b1,b2,b3,b4,b5,b6,b7,b8,b9,c0,c1,c2,c3,c4,c5,c6
+var $async$uv=A.w(function(d8,d9){if(d8===1){o.push(d9)
+s=p}for(;;)switch(s){case 0:c3=A.bzJ("POST",A.di(c8,0,null))
+c4=c3.r
+c5=t.N
+c6=A.q(c5,c5)
+c6.h(0,"Authorization","Bearer "+(c7==null?m.gps():c7))
+c6.h(0,"Content-Type","application/json")
+c6.h(0,"Accept","text/event-stream")
+c6.E(0,c9)
+c4.E(0,c6)
+c4=d3==null?m.gpB():d3
+c6=m.a6X(d2,d0)
+b7=t.K
+J.bO5(c3,B.a9.kL(A.t(["model",c4,"messages",c6,"temperature",0.7,"max_tokens",4096,"stream",!0],c5,b7),null))
+b8=A.bsR()
+l=b8==null?new A.wc(A.b([],t.O)):b8
 m.ax=l
 p=3
 s=6
-return A.k(J.buJ(l,b9).eF(0,B.oJ),$async$uv)
-case 6:k=d5
+return A.k(J.buJ(l,c3).eF(0,B.oJ),$async$uv)
+case 6:k=d9
 s=k.b!==200?7:8
 break
 case 7:s=9
 return A.k(B.U.ajT(k.w),$async$uv)
-case 9:j=d5
-c0=m.pz(d1,k.b,j)
-q=c0
+case 9:j=d9
+c4=m.pz(d5,k.b,j)
+q=c4
 n=[1]
 s=4
 break
@@ -148998,62 +148998,66 @@ h=new A.cH("")
 g=!1
 f=!1
 e=new A.cH("")
-c0=k.w.eF(0,B.oK)
-d=B.Ar.oy(B.dG.oy(c0))
+c4=k.w.eF(0,B.oK)
+d=B.Ar.oy(B.dG.oy(c4))
 c=!1
 b=null
-c0=new A.qd(A.iu(d,"stream",b4),t.KO)
+c4=new A.qd(A.iu(d,"stream",b7),t.KO)
 p=10
-c1=t.f,c2=t.j
+c5=t.f,c6=t.j
 case 13:s=15
-return A.k(c0.t(),$async$uv)
-case 15:if(!d5){s=14
-break}a=c0.gN(0)
+return A.k(c4.t(),$async$uv)
+case 15:if(!d9){s=14
+break}a=c4.gN(0)
 a0=J.bOc(a)
 if(J.an(a0)===0){s=13
-break}if(!J.as9(a0,"data:")){if(e.a.length<8000){b4=e
-b6=A.p(a0)
-b4.a+=b6}s=13
+break}if(!J.as9(a0,"data:")){if(e.a.length<8000){b7=e
+b9=A.p(a0)
+b7.a+=b9}s=13
 break}a1=B.d.av(J.buN(a0,5))
 if(J.j(a1,"[DONE]")){c=!0
 s=13
 break}a2=null
 try{a3=B.a9.fH(0,a1,null)
-if(c1.b(a3))a2=a3}catch(d3){s=13
+if(c5.b(a3))a2=a3}catch(d7){s=13
 break}if(a2==null){s=13
-break}if(J.j(J.r(a2,"piercingblow_usage"),!0)){a4=J.r(a2,"usage")
-if(c1.b(a4)){b4=A.hC(J.r(a4,"total_tokens"))
-b4=b4==null?null:B.e.D(b4)
-m.ay=b4==null?m.ay:b4}b4=A.hC(J.r(a2,"credits"))
-if(b4==null)b4=null
-m.ch=b4==null?m.ch:b4
+break}if(J.j(J.r(a2,"piercingblow_usage"),!0)){b7=A.aI(J.r(a2,"mode"))
+a4=b7==null?null:B.d.av(b7).toLowerCase()
+a5=J.j(a4,"credit")
+a6=J.r(a2,"usage")
+if(a5)m.ay=0
+else if(c5.b(a6)){b7=A.hC(J.r(a6,"total_tokens"))
+b7=b7==null?null:B.e.D(b7)
+m.ay=b7==null?m.ay:b7}c1=A.hC(J.r(a2,"credits"))
+a7=c1==null?null:c1
+if(a7!=null)m.ch=a7
 s=13
-break}a5=J.r(a2,"error")
-if(a5!=null){if(c1.b(a5)){c1=J.r(a5,"message")
-if(c1==null)c1=J.r(a5,"code")
-b8=A.p(c1==null?a5:c1)}else b8=A.p(a5)
-b=b8
+break}a8=J.r(a2,"error")
+if(a8!=null){if(c5.b(a8)){c5=J.r(a8,"message")
+if(c5==null)c5=J.r(a8,"code")
+c2=A.p(c5==null?a8:c5)}else c2=A.p(a8)
+b=c2
 s=14
-break}a6=J.r(a2,"choices")
-a7=c2.b(a6)&&J.hd(a6)?J.kM(a6):null
-if(!c1.b(a7)){s=13
-break}if(J.r(a7,"finish_reason")!=null)c=!0
-a8=J.r(a7,"delta")
-if(!c1.b(a8)){s=13
-break}b4=J.r(a8,"reasoning_content")
-if(b4==null)b4=J.r(a8,"reasoning")
-a9=b4==null?null:J.aP(b4)
-if(a9!=null&&a9.length!==0){if(!g){g=!0
+break}a9=J.r(a2,"choices")
+b0=c6.b(a9)&&J.hd(a9)?J.kM(a9):null
+if(!c5.b(b0)){s=13
+break}if(J.r(b0,"finish_reason")!=null)c=!0
+b1=J.r(b0,"delta")
+if(!c5.b(b1)){s=13
+break}b7=J.r(b1,"reasoning_content")
+if(b7==null)b7=J.r(b1,"reasoning")
+b2=b7==null?null:J.aP(b7)
+if(b2!=null&&b2.length!==0){if(!g){g=!0
 i.a+="<think>"
-d0.$1("<think>")}h.a+=a9
-i.a+=a9
-d0.$1(a9)}b4=J.r(a8,"content")
-b0=b4==null?null:J.aP(b4)
-if(b0!=null&&b0.length!==0){if(g){g=!1
+d4.$1("<think>")}h.a+=b2
+i.a+=b2
+d4.$1(b2)}b7=J.r(b1,"content")
+b3=b7==null?null:J.aP(b7)
+if(b3!=null&&b3.length!==0){if(g){g=!1
 i.a+="</think>\n\n"
-d0.$1("</think>\n\n")}f=!0
-i.a+=b0
-d0.$1(b0)}s=13
+d4.$1("</think>\n\n")}f=!0
+i.a+=b3
+d4.$1(b3)}s=13
 break
 case 14:n.push(12)
 s=11
@@ -149061,35 +149065,35 @@ break
 case 10:n=[3]
 case 11:p=3
 s=16
-return A.k(c0.aZ(0),$async$uv)
+return A.k(c4.aZ(0),$async$uv)
 case 16:s=n.pop()
 break
 case 12:if(g)i.a+="</think>\n\n"
-c0=i.a
-b1=c0.charCodeAt(0)==0?c0:c0
-if(b!=null){c0=J.an(b1)===0?"ERROR: "+d1+" returned an error \u2014 "+b:A.p(b1)+"\n\n\u26a0\ufe0f "+d1+" stopped with an error: "+b
-q=c0
+c4=i.a
+b4=c4.charCodeAt(0)==0?c4:c4
+if(b!=null){c4=J.an(b4)===0?"ERROR: "+d5+" returned an error \u2014 "+b:A.p(b4)+"\n\n\u26a0\ufe0f "+d5+" stopped with an error: "+b
+q=c4
 n=[1]
 s=4
-break}if(J.an(b1)===0){c0=e.a
-b2=c0.charCodeAt(0)==0?c0:c0
-if(J.an(b2)!==0)try{b3=B.a9.fH(0,b2,null)
-if(t.f.b(b3)&&J.r(b3,"error")!=null){c0=m.pz(d1,200,b2)
-q=c0
+break}if(J.an(b4)===0){c4=e.a
+b5=c4.charCodeAt(0)==0?c4:c4
+if(J.an(b5)!==0)try{b6=B.a9.fH(0,b5,null)
+if(t.f.b(b6)&&J.r(b6,"error")!=null){c4=m.pz(d5,200,b5)
+q=c4
 n=[1]
 s=4
-break}}catch(d3){}q="ERROR: "+d1+" returned an empty response."
+break}}catch(d7){}q="ERROR: "+d5+" returned an empty response."
 n=[1]
 s=4
-break}if(!f&&h.a.length!==0){c0=A.p(b1)
-q=c0+"\n\n\u26a0\ufe0f "+d1+" used all its output tokens on thinking. Increase Max Tokens in Settings and try again."
+break}if(!f&&h.a.length!==0){c4=A.p(b4)
+q=c4+"\n\n\u26a0\ufe0f "+d5+" used all its output tokens on thinking. Increase Max Tokens in Settings and try again."
 n=[1]
 s=4
-break}if(!c){c0=A.p(b1)
-q=c0+"\n\n\u26a0\ufe0f The response was cut off before it finished."
+break}if(!c){c4=A.p(b4)
+q=c4+"\n\n\u26a0\ufe0f The response was cut off before it finished."
 n=[1]
 s=4
-break}q=b1
+break}q=b4
 n=[1]
 s=4
 break
@@ -149098,9 +149102,9 @@ s=4
 break
 case 3:n=[2]
 case 4:p=2
-c0=m.ax
-c1=l
-if(c0==null?c1==null:c0===c1)m.ax=null
+c4=m.ax
+c5=l
+if(c4==null?c5==null:c4===c5)m.ax=null
 J.qm(l)
 s=n.pop()
 break
