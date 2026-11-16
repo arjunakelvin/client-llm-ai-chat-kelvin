@@ -356,7 +356,7 @@
         <button class="nav-item" data-view="tiers">
           <span class="ico">◈</span> Tier &amp; kuota</button>
         <button class="nav-item" data-view="plans">
-          <span class="ico">★</span> Plans &amp; ACC</button>
+          <span class="ico">★</span> Subscribe &amp; ACC</button>
         <button class="nav-item" data-view="bot">
           <span class="ico">⚙</span> API bot</button>
         <span class="nav-label" style="margin-top:10px">Monitoring</span>
@@ -1024,9 +1024,9 @@ async with aiohttp.ClientSession() as session:<br>
 
     <section class="view" id="view-plans">
     <div class="card">
-      <h2>Plans &amp; ACC pembayaran</h2>
+      <h2>Subscribe &amp; ACC pembayaran</h2>
       <p class="hint" style="margin:0 0 10px">
-        User melihat daftar paket ini di tab <b>Plans</b> aplikasi. Setelah user
+        User melihat daftar paket ini di tab <b>Subscribe</b> aplikasi. Setelah user
         transfer ke ACC ShopeePay/GoPay dan mengunggah bukti, pesanan muncul di
         <b>Pesanan</b> di bawah — tekan <b>Approve</b> untuk otomatis menambah
         kredit/token/tier ke akun, atau <b>Reject</b> kalau bukti tidak sesuai.</p>
@@ -1072,8 +1072,8 @@ async with aiohttp.ClientSession() as session:<br>
         </table>
       </div>
       <div style="margin-top:10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
-        <button id="addPlanRow">+ Tambah plan</button>
-        <button class="primary" id="savePlans">Simpan semua plan</button>
+        <button id="addPlanRow">+ Tambah subscribe</button>
+        <button class="primary" id="savePlans">Simpan semua subscribe</button>
         <span class="status" id="plansStatus"></span>
       </div>
       <p class="hint" style="margin:8px 0 0">
@@ -1151,7 +1151,7 @@ const ADMIN_VIEWS = {
   discord: 'Login Discord',
   socials: 'Media sosial',
   tiers: 'Tier & kuota',
-  plans: 'Plans & ACC',
+  plans: 'Subscribe & ACC',
   bot: 'API bot',
   logs: 'Log',
   prompt: 'System prompt',
@@ -1298,7 +1298,7 @@ function planCell(a) {
       '<span style="font-size:11px; color:var(--muted)">' + expiry + '</span><br>' +
       '<div class="actions" style="margin-top:6px">' +
         '<button data-act="plan-extend" data-tier="' + escapeAttr(tier) + '">Perpanjang 30h</button>' +
-        '<button data-act="plan-clear">Hapus plan</button>' +
+        '<button data-act="plan-clear">Hapus subscribe</button>' +
       '</div>' +
     '</td>';
   }
@@ -1392,7 +1392,7 @@ function renderPlanRows(plans) {
   const rows = $('planRows');
   if (!plans || plans.length === 0) {
     rows.innerHTML = '<tr><td colspan="16" style="color:var(--muted)">' +
-      'Belum ada plan. Klik "+ Tambah plan".</td></tr>';
+      'Belum ada subscribe. Klik "+ Tambah subscribe".</td></tr>';
     return;
   }
   rows.innerHTML = plans.map((p, i) => planRowHtml(p, i)).join('');
@@ -2115,13 +2115,13 @@ $('addPlanRow').addEventListener('click', () => {
 $('savePlans').addEventListener('click', async () => {
   const plans = collectPlans().filter((p) => p.name);
   if (plans.length === 0) {
-    setStatus($('plansStatus'), 'Minimal satu plan dengan nama.', false);
+    setStatus($('plansStatus'), 'Minimal satu subscribe dengan nama.', false);
     return;
   }
   try {
     await api('POST', '/api/admin/plans', { plans });
     await loadPlansAdmin();
-    setStatus($('plansStatus'), 'Plan disimpan.', true);
+    setStatus($('plansStatus'), 'Subscribe tersimpan.', true);
   } catch (e) {
     setStatus($('plansStatus'), String(e.message || e), false);
   }
@@ -2247,7 +2247,7 @@ $('accountRows').addEventListener('click', async (ev) => {
         : act === 'plan-pro' ? 'pro'
         : act === 'plan-extend' ? (btn.dataset.tier || 'vip')
         : 'none';
-      if (act === 'plan-clear' && !confirm('Hapus plan dari akun ini?')) return;
+      if (act === 'plan-clear' && !confirm('Hapus subscribe dari akun ini?')) return;
       await api('POST', '/api/admin/accounts/' + encodeURIComponent(id), {
         id,
         planAction: act === 'plan-clear' ? 'clear' : 'set',
