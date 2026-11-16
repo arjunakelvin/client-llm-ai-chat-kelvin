@@ -262,8 +262,8 @@
      sempit supaya field harga tetap terbaca. */
   .ap-models { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
   .ap-model-head, .ap-model-row {
-    display: grid; min-width: 940px; gap: 6px; align-items: center;
-    grid-template-columns: 1.5fr 1.7fr .7fr .7fr .55fr .7fr .7fr .7fr .7fr .5fr 34px;
+    display: grid; min-width: 820px; gap: 6px; align-items: center;
+    grid-template-columns: 1.4fr 1.6fr .62fr .62fr .62fr .62fr .5fr .42fr 34px;
     padding: 6px 8px;
   }
   .ap-model-head {
@@ -362,6 +362,8 @@
         <span class="nav-label" style="margin-top:10px">Monitoring</span>
         <button class="nav-item" data-view="logs">
           <span class="ico">≡</span> Log</button>
+        <button class="nav-item" data-view="orderlogs">
+          <span class="ico">✓</span> Log ACC</button>
         <button class="nav-item" data-view="prompt">
           <span class="ico">✎</span> System prompt</button>
       </nav>
@@ -781,22 +783,21 @@ async with aiohttp.ClientSession() as session:<br>
         User hanya melihat <b>nama model</b>, bukan nama provider.
         <b>Context</b> &amp; <b>Max out</b> diisi <b>otomatis</b> dari metadata
         model provider saat provider disimpan (bisa juga dari katalog model
-        populer). Matikan <b>Auto</b> kalau ingin mengisi angkanya manual.
-        RPM dihitung <b>per model per user</b> dari tier — bukan perlu diisi
-        manual di sini. Harga <b>In/Out</b> biarkan <b>0</b> kalau model memakai
-        kuota token — isi harga hanya kalau model itu memotong <b>kredit</b>.
+        populer). Context &amp; max output diisi <b>otomatis</b> dari metadata
+        model provider — tidak perlu diisi manual. Harga <b>In/Out</b> biarkan
+        <b>0</b> kalau model memakai kuota token — isi harga hanya kalau model
+        itu memotong <b>kredit</b>. Toggle <b>RPM</b> = jatah RPM user dipotong
+        model ini; matikan kalau model ini bebas dipakai tanpa memotong RPM.
         Matikan toggle <b>On</b> untuk menyembunyikan model tanpa menghapusnya.</p>
       <div class="ap-models">
         <div class="ap-model-head">
           <span>Nama model (tampil ke user)</span>
           <span>Model / endpoint ID</span>
-          <span>Context</span>
-          <span>Max out</span>
-          <span>Auto</span>
           <span>In /1M</span>
           <span>Out /1M</span>
           <span>In /req</span>
           <span>Out /req</span>
+          <span>RPM</span>
           <span>On</span>
           <span></span>
         </div>
@@ -843,14 +844,24 @@ async with aiohttp.ClientSession() as session:<br>
         </div>
       </div>
       <div class="row">
-        <div>
-          <label for="smContextSize">Context size</label>
-          <input type="number" id="smContextSize" min="0" value="4096">
+        <div style="flex:1 1 100%">
+          <label style="display:flex;align-items:center;gap:6px;margin-top:10px;color:var(--text)">
+            <input type="checkbox" id="smRpmEnabled" checked>
+            RPM aktif untuk model ini (jatah RPM per user tetap memakai tier)
+          </label>
+          <div class="hint">Hapus centang kalau model ini tidak boleh memakan kuota RPM — user bebas memakainya sesuka hati tanpa mengurangi jatah RPM. Default: RPM aktif.</div>
         </div>
-        <div>
-          <label for="smMaxOutput">Max output</label>
-          <input type="number" id="smMaxOutput" min="0" value="2048">
-        </div>
+      </div>
+      <label>Kemampuan model<span class="hint" style="display:block;font-weight:400">Tag/filter di aplikasi: Teks, Gambar, Vision, File, PDF, Tools, Audio, Video. Centang yang didukung model ini.</span></label>
+      <div id="smCaps" style="display:flex;flex-wrap:wrap;gap:8px 14px;margin:6px 0 10px">
+        <label style="display:flex;align-items:center;gap:4px;margin:0"><input type="checkbox" value="text" checked> Teks</label>
+        <label style="display:flex;align-items:center;gap:4px;margin:0"><input type="checkbox" value="image"> Gambar (text→image)</label>
+        <label style="display:flex;align-items:center;gap:4px;margin:0"><input type="checkbox" value="vision"> Vision (mm input gambar)</label>
+        <label style="display:flex;align-items:center;gap:4px;margin:0"><input type="checkbox" value="file"> File</label>
+        <label style="display:flex;align-items:center;gap:4px;margin:0"><input type="checkbox" value="pdf"> PDF</label>
+        <label style="display:flex;align-items:center;gap:4px;margin:0"><input type="checkbox" value="tools"> Tools / Function calling</label>
+        <label style="display:flex;align-items:center;gap:4px;margin:0"><input type="checkbox" value="audio"> Audio</label>
+        <label style="display:flex;align-items:center;gap:4px;margin:0"><input type="checkbox" value="video"> Video</label>
       </div>
       <div class="hint" id="smAutoLimits"
         style="margin:-2px 0 10px;line-height:1.5"></div>
@@ -1110,6 +1121,33 @@ async with aiohttp.ClientSession() as session:<br>
     </div>
     </section>
 
+    <section class="view" id="view-orderlogs">
+    <div class="card">
+      <h2>Log ACC pembayaran</h2>
+      <p class="hint" style="margin:0 0 12px">Riwayat semua pesanan yang sudah di‑approve
+        (muncul <b>Paid</b> di sini). Bukti foto/video hanya tetap tersimpan sampai 3 hari;
+        setelah itu otomatis hilang tapi order tetap tercatat.</p>
+      <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px">
+        <input type="search" id="orderLogSearch"
+               placeholder="Cari nama akun, Discord ID, paket, atau metode…"
+               style="flex:1; min-width:180px">
+        <button id="refreshOrderLogs">Refresh</button>
+      </div>
+      <div class="status" id="orderLogStatus"></div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr>
+            <th>Waktu</th><th>Akun</th><th>Paket</th><th>Metode</th>
+            <th>Nominal</th><th>Bukti</th>
+          </tr></thead>
+          <tbody id="orderLogRows">
+            <tr><td colspan="6" style="color:var(--muted)">Memuat…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    </section>
+
     <section class="view" id="view-prompt">
     <div class="card">
       <h2>System prompt global</h2>
@@ -1152,6 +1190,7 @@ const ADMIN_VIEWS = {
   socials: 'Media sosial',
   tiers: 'Tier & kuota',
   plans: 'Subscribe & ACC',
+  orderlogs: 'Log ACC',
   bot: 'API bot',
   logs: 'Log',
   prompt: 'System prompt',
@@ -1181,6 +1220,8 @@ function showView(name) {
   } else if (name === 'logs') {
     loadApiKeyLogs();
     loadUsageLogs();
+  } else if (name === 'orderlogs') {
+    loadOrderLogs();
   } else if (name === 'plans') {
     loadPlansAdmin();
     loadPlanOrders(ordersFilter);
@@ -1516,6 +1557,49 @@ function renderPlanOrders(orders) {
       '</td>' +
     '</tr>'
   )).join('');
+}
+
+function renderOrderLogs(orders) {
+  const rows = $('orderLogRows');
+  proofCache.length = 0;
+  if (!orders || orders.length === 0) {
+    rows.innerHTML = '<tr><td colspan="6" style="color:var(--muted)">' +
+      'Belum ada log ACC.</td></tr>';
+    return;
+  }
+  rows.innerHTML = orders.map((o) => (
+    '<tr>' +
+      '<td class="mono">' +
+        escapeHtml(new Date(o.createdAt).toLocaleString('id-ID', {
+          day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+        })) + '</td>' +
+      '<td>' + escapeHtml(o.accountName || o.accountDiscordId || o.accountId) + '</td>' +
+      '<td>' + escapeHtml(o.planName || o.planId) + '</td>' +
+      '<td>' + escapeHtml(o.method) + '</td>' +
+      '<td class="mono">' + formatRupiah(o.priceIdr) + '</td>' +
+      fmtProofCell(o) +
+    '</tr>'
+  )).join('');
+}
+
+async function loadOrderLogs() {
+  try {
+    const data = await api('GET', '/api/admin/plan-orders?status=paid');
+    const all = data.orders || [];
+    const q = ($('orderLogSearch').value || '').trim().toLowerCase();
+    const orders = q
+      ? all.filter((o) => [o.accountName, o.accountDiscordId, o.accountId,
+                          o.planName, o.planId, o.method]
+          .map((v) => String(v || '').toLowerCase())
+          .some((v) => v.includes(q)))
+      : all;
+    renderOrderLogs(orders.slice(0, 500));
+    setStatus($('orderLogStatus'),
+      orders.length + ' order ter-ACC tersimpan' +
+        (q ? ' (filter "' + escapeHtml(q) + '")' : ''), true);
+  } catch (err) {
+    setStatus($('orderLogStatus'), 'Gagal memuat: ' + (err.message || err), false);
+  }
 }
 
 async function loadPlanOrders(filter) {
@@ -2142,6 +2226,15 @@ $('planRows').addEventListener('click', (ev) => {
 document.querySelectorAll('.ordersTab').forEach((btn) => {
   btn.addEventListener('click', () => loadPlanOrders(btn.dataset.orders));
 });
+$('refreshOrderLogs').addEventListener('click', loadOrderLogs);
+$('orderLogSearch').addEventListener('input', loadOrderLogs);
+$('orderLogRows').addEventListener('click', (ev) => {
+  const proofBtn = ev.target.closest('.proof-btn');
+  if (proofBtn) {
+    const item = proofCache[Number(proofBtn.dataset.proofI)];
+    if (item) openMediaLightbox(item.src, item.kind);
+  }
+});
 
 $('planOrderRows').addEventListener('click', async (ev) => {
   const proofBtn = ev.target.closest('.proof-btn');
@@ -2351,6 +2444,29 @@ function friendlyModelName(raw) {
       .join(' ');
 }
 
+/// Label kemampuan singkat untuk badge di daftar model.
+function capabilityLabel(value) {
+  return ({
+    text: 'Teks',
+    image: 'Gambar',
+    vision: 'Vision',
+    file: 'File',
+    pdf: 'PDF',
+    tools: 'Tools',
+    audio: 'Audio',
+    video: 'Video',
+  }[String(value || '').toLowerCase()]) || escapeHtml(String(value || ''));
+}
+function capabilityChips(model) {
+  const caps = Array.isArray(model && model.capabilities) &&
+    model.capabilities.length
+    ? model.capabilities
+    : ['text'];
+  return '<span class="tag info">' +
+    caps.map((c) => capabilityLabel(c)).join(' · ') +
+    '</span>';
+}
+
 function modelRowHtml(model) {
   const tiers = (model.tierAccess || []).join(', ') || '-';
   const backend = model.backendModelId && model.backendModelId !== model.modelId
@@ -2375,15 +2491,18 @@ function modelRowHtml(model) {
     : '';
   return '<div class="model-row">' +
     '<div><b>' + title + '</b> ' +
-    '<span class="tag">' + escapeHtml(tiers) + '</span>' + activeTag +
-    hiddenTag +
+    '<span class="tag">' + escapeHtml(tiers) + '</span>' + activeTag + hiddenTag +
+    (model.rpmEnabled !== false
+      ? ' <span class="tag on">RPM</span>'
+      : ' <span class="tag info">bebas RPM</span>') +
     '<div class="meta">' + server +
     ' · ctx ' + (model.contextSize || 0) +
     ' · max ' + (model.maxOutput || 0) + cacheMeta +
     ' · id <span class="mono">' +
     escapeHtml(model.publicId || model.modelId) + '</span>' +
     backend + '</div>' +
-    '<div class="price">' + escapeHtml(pricingLabel(model)) + '</div></div>' +
+    '<div class="price">' + escapeHtml(pricingLabel(model)) + '</div>' +
+    capabilityChips(model) + '</div>' +
     '<div class="actions">' +
     '<button data-model-toggle="' + escapeAttr(model.modelId) + '" ' +
     'data-model-enabled="' + (hidden ? '0' : '1') + '">' +
@@ -2541,17 +2660,25 @@ function fillModelFormFrom(model) {
       : '';
   }
   $('smName').value = model ? (model.name || '') : '';
-  $('smContextSize').value = model ? (model.contextSize || 0) : 4096;
-  $('smMaxOutput').value = model ? (model.maxOutput || 0) : 2048;
+  // RPM per model bisa dimatikan. Default: aktif.
+  const rpmModel = model || {};
+  $('smRpmEnabled').checked =
+    model ? rpmModel.rpmEnabled !== false : true;
+  // Kemampuan model (tag/filter di aplikasi). Default: teks.
+  document.querySelectorAll('#smCaps input[type="checkbox"]').forEach((el) => {
+    const caps = Array.isArray(model && model.capabilities)
+      ? model.capabilities.map((c) => String(c).toLowerCase())
+      : ['text'];
+    el.checked = caps.includes(String(el.value).toLowerCase());
+  });
   // Context & max output diisi otomatis oleh Worker dari `/props` server saat
-  // deteksi model. Nilai di sini hanya bisa diubah manual kalau perlu.
+  // deteksi model. Nilainya hanya bisa diubah manual di kode bila perlu.
   const autoLimits = $('smAutoLimits');
   if (autoLimits) {
     autoLimits.innerHTML = model
-      ? 'Nilai context &amp; max output terisi otomatis dari server ' +
+      ? 'Context &amp; max output terisi otomatis dari server ' +
         '(llama-server <span class="mono">/props</span>) saat ' +
-        '<b>Deteksi model</b>. Angka 0 = server belum melaporkannya; ' +
-        'gateway memakai batas aman (4096).'
+        '<b>Deteksi model</b>. Ditampilkan hanya sebagai informasi.'
       : '';
   }
   const tiers = (model && model.tierAccess) || ['free', 'pro', 'vip'];
@@ -2795,8 +2922,9 @@ $('saveModelEntry').addEventListener('click', async () => {
     return;
   }
   const model = serverModels.find((m) => String(m.modelId) === String(modelId));
-  const ctx = Number($('smContextSize').value) || 0;
-  const max = Number($('smMaxOutput').value) || 0;
+  // Context & max output diisi worker dari /props server saat deteksi model.
+  const ctx = model ? Number(model.contextSize) || 0 : 0;
+  const max = model ? Number(model.maxOutput) || 0 : 0;
   // Satu mode harga saja: /req (flat), /1M (token), atau gratis.
   const mode = pricingMode();
   const pricing = {
@@ -2804,8 +2932,6 @@ $('saveModelEntry').addEventListener('click', async () => {
     outputPerReq: mode === 'req' ? (Number($('smOutputPerReq').value) || 0) : 0,
     inputPer1M: mode === '1m' ? (Number($('smInputPer1M').value) || 0) : 0,
     outputPer1M: mode === '1m' ? (Number($('smOutputPer1M').value) || 0) : 0,
-    contextSize: ctx,
-    maxOutput: max,
   };
   try {
     await api('POST', '/api/admin/server-models', {
@@ -2819,6 +2945,10 @@ $('saveModelEntry').addEventListener('click', async () => {
       maxOutput: max,
       tierAccess,
       pricing,
+      rpmEnabled: $('smRpmEnabled').checked,
+      capabilities: Array.from(
+        document.querySelectorAll('#smCaps input[type="checkbox"]:checked'))
+        .map((el) => String(el.value)),
       enabled: $('smEnabled').checked,
     });
     await loadGatewayData(true);
@@ -2931,44 +3061,35 @@ function providerModelRowHtml(model) {
   const m = model || {};
   const pricing = m.pricing || {};
   const id = 'apm_' + (++apiModelSeq);
-  // Model baru: context & max output diisi nilai umum provider (context 1M),
-  // admin tinggal menyesuaikan dengan spesifikasi modelnya. Harga input/output
-  // dibiarkan 0 supaya model memakai kuota token, bukan kredit.
-  const isNew = !m.modelId && !m.name;
-  const contextValue = m.contextSize === undefined || m.contextSize === null
-    ? (isNew ? 1000000 : 0) : m.contextSize;
-  const maxOutputValue = m.maxOutput === undefined || m.maxOutput === null
-    ? (isNew ? 8192 : 0) : m.maxOutput;
-  // Model lama tanpa flag `limitsAuto` dianggap manual kalau sudah punya
-  // angka context/max output. Model baru otomatis memakai Auto.
-  const hasExplicitLimits =
-    Number(m.contextSize) > 0 || Number(m.maxOutput) > 0;
-  const autoLimits = m.limitsAuto === undefined
-    ? (isNew || !hasExplicitLimits)
-    : !!m.limitsAuto;
-  const input = (field, type, value, extra) =>
-    '<input type="' + type + '" data-f="' + field + '" value="' +
-    escapeAttr(value === undefined || value === null ? '' : value) + '"' +
-    (extra || '') + '>';
+  const caps = Array.isArray(m.capabilities) ? m.capabilities : ['text'];
+  const cap = (value, label) =>
+    '<label class="ap-on"><input type="checkbox" data-f="cap:' + value + '"' +
+    (caps.includes(value) ? ' checked' : '') + '> ' + label + '</label>';
   return '<div class="ap-model-row" data-row="' + id + '">' +
     input('name', 'text', m.name || '', ' placeholder="Nama model"') +
     input('modelId', 'text', m.modelId || '',
       ' placeholder="@cf/moonshotai/kimi-k2.6"') +
-    input('contextSize', 'number', contextValue,
-      ' min="0" step="1" placeholder="1000000"') +
-    input('maxOutput', 'number', maxOutputValue,
-      ' min="0" step="1" placeholder="8192"') +
-    '<label class="ap-on" title="Isi otomatis dari metadata model provider">' +
-    '<input type="checkbox" data-f="limitsAuto"' +
-    (autoLimits ? ' checked' : '') + '> Auto</label>' +
     input('inputPer1M', 'number', pricing.inputPer1M || 0, ' min="0" step="0.01" placeholder="0"') +
     input('outputPer1M', 'number', pricing.outputPer1M || 0, ' min="0" step="0.01" placeholder="0"') +
     input('inputPerReq', 'number', pricing.inputPerReq || 0, ' min="0" step="0.0001" placeholder="0"') +
     input('outputPerReq', 'number', pricing.outputPerReq || 0, ' min="0" step="0.0001" placeholder="0"') +
+    '<label class="ap-on" title="Jatah RPM user dipotong model ini. Hapus centang kalau model ini bebas dipakai tanpa memotong RPM.">' +
+    '<input type="checkbox" data-f="rpmEnabled"' +
+    (m.rpmEnabled !== false ? ' checked' : '') + '> RPM</label>' +
     '<label class="ap-on"><input type="checkbox" data-f="enabled"' +
     (m.enabled !== false ? ' checked' : '') + '> On</label>' +
     '<button type="button" data-ap-remove-row="' + id +
     '" class="danger" title="Hapus model">×</button>' +
+    '<div class="ap-caps" style="grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:6px 14px;padding:4px 0 2px;border-top:1px dashed var(--line);margin-top:4px">' +
+      cap('text', 'Teks') +
+      cap('image', 'Gambar') +
+      cap('vision', 'Vision') +
+      cap('file', 'File') +
+      cap('pdf', 'PDF') +
+      cap('tools', 'Tools') +
+      cap('audio', 'Audio') +
+      cap('video', 'Video') +
+    '</div>' +
     '</div>';
 }
 
@@ -2981,19 +3102,26 @@ function collectProviderModels() {
     $('apModelRows').querySelectorAll('.ap-model-row'));
   return rows.map((row) => {
     const get = (field) => row.querySelector('[data-f="' + field + '"]');
+    const checked = (field) => !!(get(field) && get(field).checked);
+    const caps = [];
+    for (const cap of ['text', 'image', 'vision', 'file', 'pdf', 'tools',
+                       'audio', 'video']) {
+      if (checked('cap:' + cap)) caps.push(cap);
+    }
+    if (!caps.length) caps.push('text');
     return {
       name: get('name').value.trim(),
       modelId: get('modelId').value.trim(),
-      contextSize: Math.max(0, Number(get('contextSize').value) || 0),
-      maxOutput: Math.max(0, Number(get('maxOutput').value) || 0),
-      limitsAuto: get('limitsAuto').checked,
+      limitsAuto: true,
       pricing: {
         inputPer1M: Number(get('inputPer1M').value) || 0,
         outputPer1M: Number(get('outputPer1M').value) || 0,
         inputPerReq: Number(get('inputPerReq').value) || 0,
         outputPerReq: Number(get('outputPerReq').value) || 0,
       },
-      enabled: get('enabled').checked,
+      rpmEnabled: checked('rpmEnabled'),
+      enabled: checked('enabled'),
+      capabilities: caps,
     };
   }).filter((m) => m.modelId);
 }
@@ -3187,10 +3315,11 @@ function renderApiProviders() {
         '<div><b>' + escapeHtml(m.name || m.modelId) + '</b> ' +
         '<span class="tag ' + (on ? 'on' : 'off') + '">' +
         (on ? 'tampil' : 'disembunyikan') + '</span>' +
+        '<span class="tag ' + (m.rpmEnabled !== false ? 'on' : 'info') + '">' +
+        (m.rpmEnabled !== false ? 'RPM' : 'bebas RPM') + '</span>' +
         '<div class="meta mono">' + escapeHtml(m.modelId || '-') + '</div>' +
-        '<div class="meta">ctx ' + (m.contextSize || 0) +
-        ' · max ' + (m.maxOutput || 0) +
-        ' · tier ' + escapeHtml(tiers) + '</div>' +
+        '<div class="meta">tier ' + escapeHtml(tiers) + '</div>' +
+        capabilityChips(m) +
         '<div class="price">' + escapeHtml(price) + '</div></div>' +
         '<div class="actions">' +
         '<button data-ap-toggle="' + escapeAttr(p.id + '|' + index) + '">' +
@@ -3245,15 +3374,8 @@ $('apFormat').addEventListener('change', updateApiEndpointPreview);
 $('apModelRows').addEventListener('input', updateApiEndpointPreview);
 $('apModelRows').addEventListener('change', updateApiEndpointPreview);
 
-// Admin mengetik context/max output secara manual → matikan Auto untuk baris
-// itu supaya nilai manual tidak ditimpa metadata provider saat disimpan.
-$('apModelRows').addEventListener('input', (ev) => {
-  const field = ev.target && ev.target.getAttribute('data-f');
-  if (field !== 'contextSize' && field !== 'maxOutput') return;
-  const row = ev.target.closest('.ap-model-row');
-  const auto = row && row.querySelector('[data-f="limitsAuto"]');
-  if (auto) auto.checked = false;
-});
+
+
 
 $('apModelRows').addEventListener('click', (ev) => {
   const rowId = ev.target.getAttribute('data-ap-remove-row');
