@@ -689,6 +689,12 @@ async with aiohttp.ClientSession() as session:<br>
             <span class="mono">deepseek-chat</span></div>
         </div>
         <div class="ap-guide-row">
+          <b>Google Gemini langsung</b>
+          <div>Base URL: <span class="mono">https://generativelanguage.googleapis.com/v1beta</span><br>
+            Model: <span class="mono">gemini-4-hydrogen</span> /
+            <span class="mono">gemini-2.5-flash</span></div>
+        </div>
+        <div class="ap-guide-row">
           <b>Anthropic langsung</b>
           <div>Base URL: <span class="mono">https://api.anthropic.com/v1</span><br>
             Model: <span class="mono">claude-sonnet-4-20250514</span></div>
@@ -730,6 +736,7 @@ async with aiohttp.ClientSession() as session:<br>
             <option value="auto">Auto (rekomendasi)</option>
             <option value="openai">OpenAI-compatible</option>
             <option value="anthropic">Anthropic Messages</option>
+            <option value="google">Google Gemini (v1beta)</option>
             <option value="cloudflare">Cloudflare Workers AI (model di path)</option>
             <option value="cloudflare-universal">Cloudflare REST /ai/run (model + input)</option>
           </select>
@@ -2998,17 +3005,19 @@ function providerFormatLabel(value) {
     'anthropic': 'Anthropic Messages',
     'cloudflare': 'Cloudflare Workers AI (path)',
     'cloudflare-universal': 'Cloudflare REST /ai/run',
+    'google': 'Google Gemini (v1beta)',
   };
   return labels[value] || 'Auto';
 }
 
 /// Cermin aturan worker: tentukan jenis API dari base URL + model ID.
 function guessProviderMode(format, baseUrl, modelId) {
-  if (['openai', 'anthropic', 'cloudflare', 'cloudflare-universal']
+  if (['openai', 'anthropic', 'cloudflare', 'cloudflare-universal', 'google']
     .includes(format)) {
     return format;
   }
   const base = String(baseUrl || '').trim().replace(/\/+$/, '');
+  if (/(^|\/\/)generativelanguage\.googleapis\.com\//i.test(base)) return 'google';
   const model = String(modelId || '').trim();
   const anthropicHost = /(^|\/\/)api\.anthropic\.com\//i.test(base);
   const anthropicModel = /^anthropic\//i.test(model) || /^claude/i.test(model);
@@ -3036,6 +3045,12 @@ function providerEndpointUrl(format, baseUrl, modelId) {
   const base = raw.replace(/\/+$/, '');
   const model = String(modelId || '').trim().replace(/^\/+/, '');
   const mode = guessProviderMode(format, base, model);
+  if (mode === 'google') {
+    let root = base.replace(/\/models(\/[^/]*)?$/i, '');
+    root = root.replace(/\/v\d[a-z0-9.]*$/i, '');
+    // Mirip worker: tambah versi /v1beta.
+    return `${root}/v1beta/models/${model}:generateContent`;
+  }
   if (mode === 'cloudflare') {
     if (/\/ai\/run\/.+/i.test(base)) return base;
     if (/\/ai\/run$/i.test(base)) return base + '/' + model;
