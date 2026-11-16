@@ -1173,6 +1173,12 @@ async with aiohttp.ClientSession() as session:<br>
     </div>
   </div>
 
+  <!-- Pratinjau fullscreen bukti (foto & video) — diletakkan SEBELUM script yang memakainya -->
+  <div id="mediaLightbox" class="media-lightbox" role="dialog" aria-hidden="true" aria-label="Pratinjau bukti pembayaran">
+    <button id="mediaLightboxClose" class="lb-close" type="button" aria-label="Tutup">×</button>
+    <div id="mediaLightboxBody" class="lb-body"></div>
+  </div>
+
 <script>
 'use strict';
 const $ = (id) => document.getElementById(id);
@@ -3057,6 +3063,13 @@ function providerModelsOf(provider) {
   return [];
 }
 
+// Helper kecil: input field untuk baris model provider (dipakai providerModelRowHtml).
+function input(field, type, value, extra) {
+  return '<input type="' + type + '" data-f="' + escapeAttr(field) +
+    '" value="' + escapeAttr(value == null ? '' : value) + '"' +
+    (extra || '') + '>';
+}
+
 function providerModelRowHtml(model) {
   const m = model || {};
   const pricing = m.pricing || {};
@@ -3658,10 +3671,6 @@ document.addEventListener('keydown', (ev) => {
 });
 $('usageLogSearch').addEventListener('input', () => loadUsageLogs());
 </script>
-<div id="mediaLightbox" class="media-lightbox" role="dialog" aria-hidden="true" aria-label="Pratinjau bukti pembayaran">
-  <button id="mediaLightboxClose" class="lb-close" type="button" aria-label="Tutup">×</button>
-  <div id="mediaLightboxBody" class="lb-body"></div>
-</div>
 
 </body>
 </html>
