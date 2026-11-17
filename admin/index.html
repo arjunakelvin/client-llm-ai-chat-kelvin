@@ -892,7 +892,7 @@ async with aiohttp.ClientSession() as session:<br>
           <div class="hint">Hapus centang kalau model ini tidak boleh memakan kuota RPM — user bebas memakainya sesuka hati tanpa mengurangi jatah RPM. Default: RPM aktif.</div>
         </div>
       </div>
-      <label>Kemampuan model<span class="hint" style="display:block;font-weight:400">Tag/filter di aplikasi: Teks, Gambar, Vision, File, PDF, Tools, Audio, Video. Centang yang didukung model ini.</span></label>
+      <label>Kemampuan model<span class="hint" style="display:block;font-weight:400">Tag/filter di aplikasi: Teks, Gambar, Vision, File, PDF, Tools, Audio, Video. Untuk provider AI, kemampuan diisi otomatis dari metadata/nama model.</span></label>
       <div id="smCaps" style="display:flex;flex-wrap:wrap;gap:8px 14px;margin:6px 0 10px">
         <label style="display:flex;align-items:center;gap:4px;margin:0"><input type="checkbox" value="text" checked> Teks</label>
         <label style="display:flex;align-items:center;gap:4px;margin:0"><input type="checkbox" value="image"> Gambar (text→image)</label>
@@ -3201,6 +3201,7 @@ function providerModelRowHtml(model) {
     '<button type="button" data-ap-remove-row="' + id +
     '" class="danger" title="Hapus model">×</button>' +
     '<div class="ap-caps" style="grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:6px 14px;padding:4px 0 2px;border-top:1px dashed var(--line);margin-top:4px">' +
+      '<div style="width:100%;font-size:10.5px;color:var(--muted);margin-bottom:2px">Kemampuan terdeteksi otomatis dari provider/nama model (mis. gemini-hydrogen = teks+gambar+video, recraft = gambar) — centang manual hanya bila perlu.</div>' +
       cap('text', 'Teks') +
       cap('image', 'Gambar') +
       cap('vision', 'Vision') +
