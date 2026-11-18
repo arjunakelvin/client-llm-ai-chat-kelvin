@@ -1289,12 +1289,12 @@ async with aiohttp.ClientSession() as session:<br>
 
       <div style="margin-top:18px; padding-top:12px; border-top:1px solid var(--line)">
         <h3 style="margin:0 0 8px">Download aplikasi</h3>
-        <div class="row" style="flex-wrap:wrap; gap:8px">
-          <button id="dlWindows" class="primary">⬇ Windows Desktop (.zip)</button>
-          <button id="dlAndroid">⬇ Android (APK)</button>
-          <button id="dlIos">⬇ iOS (TestFlight)</button>
-        </div>
-        <div class="status" id="dlStatus"></div>
+        <p class="hint" style="margin:0">
+          Tombol download untuk user tampil di aplikasi web: <b>Settings →
+          Download aplikasi</b> (halaman web piercingblow.ai.id). Admin di sini
+          cukup mengatur versi terbaru + link download Windows / Android / iOS
+          di atas — aplikasi web akan mengambilnya dari <code>/api/release</code>
+          secara otomatis.</p>
       </div>
     </div>
     </section>
@@ -4004,29 +4004,6 @@ async function saveUpdVersion() {
 
 $('saveUpdVersion').addEventListener('click', saveUpdVersion);
 $('loadUpdVersion').addEventListener('click', loadUpdateConfig);
-
-async function dlApp(kind) {
-  const status = $('dlStatus');
-  try {
-    const data = await api('GET', '/api/admin/config');
-    let url = '';
-    if (kind === 'windows') url = (data && data.releaseWindowsUrl) || '';
-    else if (kind === 'android') url = (data && data.releaseAndroidUrl) || '';
-    else if (kind === 'ios') url = (data && data.releaseIosUrl) || '';
-    if (!url) {
-      setStatus(status, 'Link belum di-setting. Simpan link download dulu.', false);
-      return;
-    }
-    window.open(url, '_blank', 'noopener');
-    setStatus(status, 'Download dibuka di tab baru.', true);
-  } catch (e) {
-    setStatus(status, String(e.message || e), false);
-  }
-}
-
-$('dlWindows').addEventListener('click', () => dlApp('windows'));
-$('dlAndroid').addEventListener('click', () => dlApp('android'));
-$('dlIos').addEventListener('click', () => dlApp('ios'));
 
 // ── Pratinjau fullscreen bukti (foto & video) ───────────────────────────
 function openMediaLightbox(src, kind) {
