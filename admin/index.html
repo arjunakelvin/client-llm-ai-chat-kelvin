@@ -395,6 +395,8 @@
         <button class="nav-item" data-view="bot">
           <span class="ico">⚙</span> API bot</button>
         <span class="nav-label" style="margin-top:10px">Monitoring</span>
+        <button class="nav-item" data-view="devices">
+          <span class="ico">▦</span> Perangkat &amp; IP</button>
         <button class="nav-item" data-view="logs">
           <span class="ico">≡</span> Log</button>
         <button class="nav-item" data-view="orderlogs">
@@ -1025,6 +1027,37 @@ async with aiohttp.ClientSession() as session:<br>
     </div>
     </section>
 
+    <section class="view" id="view-devices">
+    <div class="card">
+      <h2>Perangkat &amp; IP</h2>
+      <p style="color:var(--muted);font-size:12px;margin:0 0 8px">
+        Perangkat yang pernah membuka aplikasi (desktop Windows &amp; web),
+        lengkap dengan akun yang dipakai dan IP publiknya. Data dikirim
+        otomatis saat aplikasi dibuka / login.</p>
+      <div class="row" style="align-items:center;gap:8px;margin-bottom:8px">
+        <input type="search" id="deviceLogSearch"
+               placeholder="Cari user, IP, browser, OS, atau CPU…"
+               style="flex:1;min-width:180px">
+        <button id="refreshDeviceLogs">Refresh</button>
+        <button id="clearDeviceLogs" class="danger">Hapus semua</button>
+      </div>
+      <div class="status" id="deviceLogStatus"></div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Terakhir</th><th>User</th><th>Aplikasi</th>
+              <th>Perangkat</th><th>IP</th><th>Kunjungan</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="deviceLogRows">
+            <tr><td colspan="7" style="color:var(--muted)">Belum ada perangkat.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    </section>
+
     <section class="view" id="view-accounts">
     <div class="card">
       <h2>Akun</h2>
@@ -1244,6 +1277,7 @@ const ADMIN_VIEWS = {
   orderlogs: 'Log ACC',
   bot: 'API bot',
   logs: 'Log',
+  devices: 'Perangkat & IP',
   prompt: 'System prompt',
 };
 let currentView = 'server';
@@ -1271,6 +1305,8 @@ function showView(name) {
   } else if (name === 'logs') {
     loadApiKeyLogs();
     loadUsageLogs();
+  } else if (name === 'devices') {
+    loadDeviceLogs();
   } else if (name === 'orderlogs') {
     loadOrderLogs();
   } else if (name === 'plans') {
@@ -2109,6 +2145,8 @@ $('refreshView').addEventListener('click', async () => {
     await loadAllManagers();
   } else if (currentView === 'providers') {
     await loadApiProviders();
+  } else if (currentView === 'devices') {
+    await loadDeviceLogs();
   }
 });
 
@@ -3730,6 +3768,122 @@ async function loadUsageLogs() {
 }
 
 $('refreshUsageLogs').addEventListener('click', loadUsageLogs);
+
+// ── Perangkat & IP ───────────────────────────────────────────────────────
+
+function devicePlatformText(l) {
+  const parts = [];
+  if (l.platform) parts.push(l.platform);
+  else if (l.osName) parts.push(l.osName + (l.osVersion ? ' ' + l.osVersion : ''));
+  if (l.deviceModel) parts.push(l.deviceModel);
+  return parts.join(' · ');
+}
+
+function deviceBrowserText(l) {
+  const parts = [];
+  if (l.browser) parts.push(l.browser);
+  if (l.screen) parts.push('Layar ' + l.screen);
+  return parts.join(' · ');
+}
+
+function deviceHardwareText(l) {
+  const parts = [];
+  if (l.cpuModel) parts.push('CPU: ' + l.cpuModel);
+  if (l.gpuModel) parts.push('GPU: ' + l.gpuModel);
+  if (l.architecture) parts.push(l.architecture);
+  if (l.appVersion) parts.push('v' + l.appVersion);
+  return parts.join(' · ');
+}
+
+async function loadDeviceLogs() {
+  try {
+    const data = await api('GET', '/api/admin/device-logs');
+    const all = data.logs || [];
+    const q = ($('deviceLogSearch').value || '').trim().toLowerCase();
+    const logs = q
+      ? all.filter((l) => [
+          l.user, l.userId, l.accountId, l.ip, l.platform, l.osName,
+          l.osVersion, l.browser, l.deviceModel, l.cpuModel, l.gpuModel, l.app,
+        ].map((v) => String(v || '').toLowerCase())
+          .some((v) => v.includes(q)))
+      : all;
+    if (!logs.length) {
+      $('deviceLogRows').innerHTML =
+        '<tr><td colspan="7" style="color:var(--muted)">' +
+        (all.length ? 'Tidak ada perangkat yang cocok.' : 'Belum ada perangkat.') +
+        '</td></tr>';
+      setStatus($('deviceLogStatus'),
+        all.length ? '0 dari ' + all.length + ' perangkat' : '', null);
+      return;
+    }
+    // Semua baris dirender; tinggi tabel dibatasi CSS (10 baris) + scroll.
+    $('deviceLogRows').innerHTML = logs.slice(0, 500).map((l) => {
+      const d = new Date(Number(l.lastSeen) || 0);
+      const ts = d.toLocaleString('id-ID');
+      const app = String(l.app || 'web').toLowerCase();
+      const appLabel = app === 'desktop' ? 'Desktop'
+        : (app === 'web' ? 'Web' : (l.app || '—'));
+      const appPill = app === 'desktop' ? 'info' : 'active';
+      const userIdText = l.userId && l.userId !== l.accountId
+        ? '<div class="hint" style="margin:0;font-size:11px">ID ' +
+          escapeHtml(l.userId) + '</div>'
+        : '';
+      const guestPill = l.guest ? ' <span class="pill">tamu</span>' : '';
+      const platform = escapeHtml(devicePlatformText(l) || '—');
+      const browserText = escapeHtml(deviceBrowserText(l));
+      const hardware = escapeHtml(deviceHardwareText(l));
+      return '<tr>' +
+        '<td>' + escapeHtml(ts) + '</td>' +
+        '<td>' + escapeHtml(l.user || (l.guest ? 'Tamu' : l.accountId || '—')) +
+          guestPill + userIdText + '</td>' +
+        '<td><span class="pill ' + appPill + '">' + escapeHtml(appLabel) +
+          '</span></td>' +
+        '<td>' + platform +
+          (browserText ? '<div class="hint" style="margin:0;font-size:11px">' +
+            browserText + '</div>' : '') +
+          (hardware ? '<div class="hint" style="margin:0;font-size:11px">' +
+            hardware + '</div>' : '') + '</td>' +
+        '<td><code>' + escapeHtml(l.ip || '—') + '</code></td>' +
+        '<td>' + fmtInt(l.visits || 1) + '</td>' +
+        '<td class="actions"><button class="danger" data-device-del="' +
+          escapeAttr(l.id || '') + '">Hapus</button></td>' +
+      '</tr>';
+    }).join('');
+    setStatus($('deviceLogStatus'), logs.length + ' perangkat' +
+      (q ? ' (difilter "' + escapeHtml(q) + '")' : ''), null);
+  } catch (e) {
+    setStatus($('deviceLogStatus'), String(e.message || e), false);
+  }
+}
+
+$('refreshDeviceLogs').addEventListener('click', loadDeviceLogs);
+$('deviceLogSearch').addEventListener('input', () => loadDeviceLogs());
+
+document.addEventListener('click', async (ev) => {
+  const btn = ev.target.closest('[data-device-del]');
+  if (!btn) return;
+  const id = btn.getAttribute('data-device-del');
+  if (!id) return;
+  ev.preventDefault();
+  try {
+    await api('DELETE', '/api/admin/device-logs', { id });
+    setStatus($('deviceLogStatus'), 'Perangkat dihapus.', true);
+    await loadDeviceLogs();
+  } catch (e) {
+    setStatus($('deviceLogStatus'), String(e.message || e), false);
+  }
+});
+
+$('clearDeviceLogs').addEventListener('click', async () => {
+  if (!confirm('Hapus semua log perangkat?')) return;
+  try {
+    await api('DELETE', '/api/admin/device-logs', { all: true });
+    setStatus($('deviceLogStatus'), 'Semua log perangkat dihapus.', true);
+    await loadDeviceLogs();
+  } catch (e) {
+    setStatus($('deviceLogStatus'), String(e.message || e), false);
+  }
+});
 
 // ── Pratinjau fullscreen bukti (foto & video) ───────────────────────────
 function openMediaLightbox(src, kind) {
