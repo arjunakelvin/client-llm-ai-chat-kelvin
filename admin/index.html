@@ -40,6 +40,7 @@
   }
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
   button.danger { color: var(--red); }
+  button.warn { color: #d29922; }
   button:disabled { opacity: .5; cursor: default; }
   .switch { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
   .switch input { width: 18px; height: 18px; accent-color: var(--accent); }
@@ -403,6 +404,8 @@
           <span class="ico">✓</span> Log ACC</button>
         <button class="nav-item" data-view="prompt">
           <span class="ico">✎</span> System prompt</button>
+        <button class="nav-item" data-view="update">
+          <span class="ico">⬆</span> Update &amp; Download</button>
       </nav>
       <div class="sidebar-footer">
         <div class="hint">AI-Agent PiercingBlow<br>Dashboard admin privat</div>
@@ -1247,6 +1250,55 @@ async with aiohttp.ClientSession() as session:<br>
     </div>
     </section>
 
+    <section class="view" id="view-update">
+    <div class="card">
+      <h2>Update &amp; Download</h2>
+      <p class="hint" style="margin:0 0 12px">
+        Atur <b>versi update</b> secara manual (mis. <b>23.45.9</b> → diperbarui ke
+        <b>24.33.4</b>) dan unduh build aplikasi. Setelah admin menyimpan versi
+        baru, aplikasi web akan menandai update tersebut secara otomatis.</p>
+      <div class="row">
+        <div>
+          <label for="updVersion">Versi update (manual, contoh: 23.45.9)</label>
+          <input type="text" id="updVersion" placeholder="24.33.4">
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="updWindowsUrl">Link download Windows Desktop (.zip)</label>
+          <input type="url" id="updWindowsUrl" placeholder="https://piercingblow.ai.id/dl/PiercingBlow-AI-Windows-x64.zip">
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="updAndroidUrl">Link download Android (APK)</label>
+          <input type="url" id="updAndroidUrl" placeholder="https://piercingblow.ai.id/dl/PiercingBlow-android.apk">
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="updIosUrl">Link download iOS (TestFlight)</label>
+          <input type="url" id="updIosUrl" placeholder="https://testflight.apple.com/join/…">
+        </div>
+      </div>
+      <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap">
+        <button class="primary" id="saveUpdVersion">Simpan versi &amp; link update</button>
+        <button id="loadUpdVersion">Muat dari server</button>
+      </div>
+      <div class="status" id="updVersionStatus"></div>
+
+      <div style="margin-top:18px; padding-top:12px; border-top:1px solid var(--line)">
+        <h3 style="margin:0 0 8px">Download aplikasi</h3>
+        <div class="row" style="flex-wrap:wrap; gap:8px">
+          <button id="dlWindows" class="primary">⬇ Windows Desktop (.zip)</button>
+          <button id="dlAndroid">⬇ Android (APK)</button>
+          <button id="dlIos">⬇ iOS (TestFlight)</button>
+        </div>
+        <div class="status" id="dlStatus"></div>
+      </div>
+    </div>
+    </section>
+
       </main>
     </div>
   </div>
@@ -1279,6 +1331,7 @@ const ADMIN_VIEWS = {
   logs: 'Log',
   devices: 'Perangkat & IP',
   prompt: 'System prompt',
+  update: 'Update & Download',
 };
 let currentView = 'server';
 
@@ -1312,6 +1365,8 @@ function showView(name) {
   } else if (name === 'plans') {
     loadPlansAdmin();
     loadPlanOrders(ordersFilter);
+  } else if (name === 'update') {
+    loadUpdateConfig();
   }
 }
 
@@ -3790,6 +3845,8 @@ function deviceHardwareText(l) {
   const parts = [];
   if (l.cpuModel) parts.push('CPU: ' + l.cpuModel);
   if (l.gpuModel) parts.push('GPU: ' + l.gpuModel);
+  if (l.ramGB) parts.push('RAM ' + l.ramGB + ' GB');
+  if (l.availableRamGB) parts.push('Available ' + l.availableRamGB + ' GB');
   if (l.architecture) parts.push(l.architecture);
   if (l.appVersion) parts.push('v' + l.appVersion);
   return parts.join(' · ');
@@ -3846,7 +3903,8 @@ async function loadDeviceLogs() {
         '<td><code>' + escapeHtml(l.ip || '—') + '</code></td>' +
         '<td>' + fmtInt(l.visits || 1) + '</td>' +
         '<td class="actions"><button class="danger" data-device-del="' +
-          escapeAttr(l.id || '') + '">Hapus</button></td>' +
+          escapeAttr(l.id || '') + '">Hapus</button> <button class="warn" data-device-ban="' +
+          escapeAttr(l.id || '') + '">Ban</button></td>' +
       '</tr>';
     }).join('');
     setStatus($('deviceLogStatus'), logs.length + ' perangkat' +
@@ -3861,16 +3919,32 @@ $('deviceLogSearch').addEventListener('input', () => loadDeviceLogs());
 
 document.addEventListener('click', async (ev) => {
   const btn = ev.target.closest('[data-device-del]');
-  if (!btn) return;
-  const id = btn.getAttribute('data-device-del');
-  if (!id) return;
-  ev.preventDefault();
-  try {
-    await api('DELETE', '/api/admin/device-logs', { id });
-    setStatus($('deviceLogStatus'), 'Perangkat dihapus.', true);
-    await loadDeviceLogs();
-  } catch (e) {
-    setStatus($('deviceLogStatus'), String(e.message || e), false);
+  if (btn) {
+    const id = btn.getAttribute('data-device-del');
+    if (!id) return;
+    ev.preventDefault();
+    try {
+      await api('DELETE', '/api/admin/device-logs', { id });
+      setStatus($('deviceLogStatus'), 'Perangkat dihapus.', true);
+      await loadDeviceLogs();
+    } catch (e) {
+      setStatus($('deviceLogStatus'), String(e.message || e), false);
+    }
+    return;
+  }
+  const banBtn = ev.target.closest('[data-device-ban]');
+  if (banBtn) {
+    const id = banBtn.getAttribute('data-device-ban');
+    if (!id) return;
+    ev.preventDefault();
+    try {
+      await api('POST', '/api/admin/device-logs/ban', { id });
+      setStatus($('deviceLogStatus'), 'Perangkat di-ban.', true);
+      await loadDeviceLogs();
+    } catch (e) {
+      setStatus($('deviceLogStatus'), String(e.message || e), false);
+    }
+    return;
   }
 });
 
@@ -3884,6 +3958,75 @@ $('clearDeviceLogs').addEventListener('click', async () => {
     setStatus($('deviceLogStatus'), String(e.message || e), false);
   }
 });
+
+// ── Update & Download ────────────────────────────────────────────────────
+
+async function loadUpdateConfig() {
+  const status = $('updVersionStatus');
+  try {
+    const data = await api('GET', '/api/admin/config');
+    $('updVersion').value = (data && data.releaseVersion) || '';
+    $('updWindowsUrl').value = (data && data.releaseWindowsUrl) || '';
+    $('updAndroidUrl').value = (data && data.releaseAndroidUrl) || '';
+    $('updIosUrl').value = (data && data.releaseIosUrl) || '';
+    const v = (data && data.releaseVersion) || '';
+    setStatus(status, v
+      ? 'Versi update diset dari admin: ' + v
+      : 'Belum ada versi update dari admin.', true);
+  } catch (e) {
+    setStatus(status, String(e.message || e), false);
+  }
+}
+
+async function saveUpdVersion() {
+  const status = $('updVersionStatus');
+  const v = ($('updVersion').value || '').trim();
+  const windowsUrl = ($('updWindowsUrl').value || '').trim();
+  const androidUrl = ($('updAndroidUrl').value || '').trim();
+  const iosUrl = ($('updIosUrl').value || '').trim();
+  if (!v) {
+    setStatus(status, 'Isi dulu versi yang mau disimpan (mis. 24.33.4).', false);
+    return;
+  }
+  try {
+    await api('PATCH', '/api/admin/config', {
+      releaseVersion: v,
+      releaseWindowsUrl: windowsUrl,
+      releaseAndroidUrl: androidUrl,
+      releaseIosUrl: iosUrl,
+    });
+    setStatus(status, 'Versi & link update tersimpan: ' + v, true);
+    await loadUpdateConfig();
+  } catch (e) {
+    setStatus(status, String(e.message || e), false);
+  }
+}
+
+$('saveUpdVersion').addEventListener('click', saveUpdVersion);
+$('loadUpdVersion').addEventListener('click', loadUpdateConfig);
+
+async function dlApp(kind) {
+  const status = $('dlStatus');
+  try {
+    const data = await api('GET', '/api/admin/config');
+    let url = '';
+    if (kind === 'windows') url = (data && data.releaseWindowsUrl) || '';
+    else if (kind === 'android') url = (data && data.releaseAndroidUrl) || '';
+    else if (kind === 'ios') url = (data && data.releaseIosUrl) || '';
+    if (!url) {
+      setStatus(status, 'Link belum di-setting. Simpan link download dulu.', false);
+      return;
+    }
+    window.open(url, '_blank', 'noopener');
+    setStatus(status, 'Download dibuka di tab baru.', true);
+  } catch (e) {
+    setStatus(status, String(e.message || e), false);
+  }
+}
+
+$('dlWindows').addEventListener('click', () => dlApp('windows'));
+$('dlAndroid').addEventListener('click', () => dlApp('android'));
+$('dlIos').addEventListener('click', () => dlApp('ios'));
 
 // ── Pratinjau fullscreen bukti (foto & video) ───────────────────────────
 function openMediaLightbox(src, kind) {
