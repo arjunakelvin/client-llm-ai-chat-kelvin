@@ -897,17 +897,15 @@ async with aiohttp.ClientSession() as session:<br>
           <div class="hint">Hapus centang kalau model ini tidak boleh memakan kuota RPM — user bebas memakainya sesuka hati tanpa mengurangi jatah RPM. Default: RPM aktif.</div>
         </div>
       </div>
-      <label>Kemampuan model<span class="hint" style="display:block;font-weight:400">Tag/filter di aplikasi: Teks, Gambar, Vision, File, PDF, Tools, Audio, Video. Untuk provider AI, kemampuan diisi otomatis dari metadata/nama model.</span></label>
-      <div id="smCaps" style="display:flex;flex-wrap:wrap;gap:8px 14px;margin:6px 0 10px">
-        <label style="display:flex;align-items:center;gap:4px;margin:0"><input type="checkbox" value="text" checked> Teks</label>
-        <label style="display:flex;align-items:center;gap:4px;margin:0"><input type="checkbox" value="image"> Gambar (text→image)</label>
-        <label style="display:flex;align-items:center;gap:4px;margin:0"><input type="checkbox" value="vision"> Vision (mm input gambar)</label>
-        <label style="display:flex;align-items:center;gap:4px;margin:0"><input type="checkbox" value="file"> File</label>
-        <label style="display:flex;align-items:center;gap:4px;margin:0"><input type="checkbox" value="pdf"> PDF</label>
-        <label style="display:flex;align-items:center;gap:4px;margin:0"><input type="checkbox" value="tools"> Tools / Function calling</label>
-        <label style="display:flex;align-items:center;gap:4px;margin:0"><input type="checkbox" value="audio"> Audio</label>
-        <label style="display:flex;align-items:center;gap:4px;margin:0"><input type="checkbox" value="video"> Video</label>
+      <div class="row">
+        <div style="flex:1 1 100%">
+          <label for="smVendor">Perusahaan / vendor model</label>
+          <select id="smVendor"></select>
+          <div class="hint">Menentukan logo yang tampil di aplikasi (Model List &amp; detail model). "Auto" mendeteksi perusahaan dari nama model.</div>
+        </div>
       </div>
+      <label>Kemampuan model<span class="hint" style="display:block;font-weight:400">Terdeteksi otomatis dari nama model &amp; metadata server — tidak perlu (dan tidak bisa) diatur manual di sini.</span></label>
+      <div id="smCapsAuto" class="hint" style="margin:-2px 0 10px;line-height:1.5"></div>
       <div class="hint" id="smAutoLimits"
         style="margin:-2px 0 10px;line-height:1.5"></div>
       <label>Tier yang boleh akses</label>
@@ -2149,6 +2147,7 @@ async function showApp() {
   await refreshAll();
   // Browser kadang memulihkan isi form setelah reload; mulai dari form kosong.
   resetServerForm();
+  populateVendorSelects();
   showView(sessionStorage.getItem('pb_admin_view') || 'server');
   // Pantau daemon tiap server (CPU/RAM/disk/network + log).
   if (managerTimer) clearInterval(managerTimer);
@@ -2673,6 +2672,47 @@ function capabilityChips(model) {
     '</span>';
 }
 
+const VENDORS = [
+  ['auto', 'Auto — deteksi dari nama model'],
+  ['anthropic', 'Anthropic'],
+  ['openai', 'OpenAI'],
+  ['deepseek', 'DeepSeek'],
+  ['google', 'Google'],
+  ['meta', 'Meta'],
+  ['mistral', 'Mistral'],
+  ['xai', 'xAI'],
+  ['qwen', 'Qwen'],
+  ['moonshot', 'Kimi (Moonshot)'],
+  ['zhipu', 'Zhipu (GLM)'],
+  ['minimax', 'MiniMax'],
+  ['cohere', 'Cohere'],
+  ['groq', 'Groq'],
+  ['nvidia', 'NVIDIA'],
+  ['nous', 'Nous Research'],
+  ['bytedance', 'ByteDance'],
+  ['other', 'Lainnya'],
+];
+
+function vendorOptions(selected) {
+  const cur = String(selected || 'auto').trim().toLowerCase();
+  return VENDORS.map(([id, label]) =>
+    '<option value="' + escapeAttr(id) + '"' +
+    (id === cur ? ' selected' : '') + '>' +
+    escapeHtml(label) + '</option>').join('');
+}
+
+function vendorLabel(id) {
+  const key = String(id || '').trim().toLowerCase();
+  const found = VENDORS.find(([vid]) => vid === key);
+  if (found) return found[1];
+  return 'Lainnya';
+}
+
+function populateVendorSelects() {
+  const sel = $('smVendor');
+  if (sel) sel.innerHTML = vendorOptions('auto');
+}
+
 function modelRowHtml(model) {
   const tiers = (model.tierAccess || []).join(', ') || '-';
   const backend = model.backendModelId && model.backendModelId !== model.modelId
@@ -2687,6 +2727,8 @@ function modelRowHtml(model) {
   const hiddenTag = hidden ? ' <span class="tag off">disembunyikan</span>' : '';
   // Nama model saja — nama file .gguf tidak ditampilkan.
   const title = escapeHtml(model.name || friendlyModelName(model.modelId));
+  const vendorTag = ' <span class="tag info">' +
+    escapeHtml(vendorLabel(model.vendor)) + '</span>';
   const server = model.serverName ? ' · ' + escapeHtml(model.serverName) : '';
   // Cache hit/miss & pemakaian per model (dari endpoint /api/admin/model-stats).
   const stat = modelStats[String(model.modelId)] || null;
@@ -2697,7 +2739,7 @@ function modelRowHtml(model) {
     : '';
   return '<div class="model-row">' +
     '<div><b>' + title + '</b> ' +
-    '<span class="tag">' + escapeHtml(tiers) + '</span>' + activeTag + hiddenTag +
+    '<span class="tag">' + escapeHtml(tiers) + '</span>' + activeTag + hiddenTag + vendorTag +
     (model.rpmEnabled !== false
       ? ' <span class="tag on">RPM</span>'
       : ' <span class="tag info">bebas RPM</span>') +
@@ -2870,13 +2912,22 @@ function fillModelFormFrom(model) {
   const rpmModel = model || {};
   $('smRpmEnabled').checked =
     model ? rpmModel.rpmEnabled !== false : true;
-  // Kemampuan model (tag/filter di aplikasi). Default: teks.
-  document.querySelectorAll('#smCaps input[type="checkbox"]').forEach((el) => {
-    const caps = Array.isArray(model && model.capabilities)
-      ? model.capabilities.map((c) => String(c).toLowerCase())
+  // Kemampuan terdeteksi otomatis — tampilkan saja (read-only).
+  const capsAuto = $('smCapsAuto');
+  if (capsAuto) {
+    const caps = model && Array.isArray(model.capabilities) &&
+        model.capabilities.length
+      ? model.capabilities
       : ['text'];
-    el.checked = caps.includes(String(el.value).toLowerCase());
-  });
+    capsAuto.innerHTML = model
+      ? 'Terdeteksi: <b>' + caps.map(capabilityLabel).join(', ') +
+        '</b>'
+      : '';
+  }
+  // Vendor/perusahaan pembuat model (logo di aplikasi). 'auto' = deteksi
+  // dari nama model.
+  const smVendor = $('smVendor');
+  if (smVendor) smVendor.value = model && model.vendor ? model.vendor : 'auto';
   // Context & max output diisi otomatis oleh Worker dari `/props` server saat
   // deteksi model. Nilainya hanya bisa diubah manual di kode bila perlu.
   const autoLimits = $('smAutoLimits');
@@ -3152,9 +3203,8 @@ $('saveModelEntry').addEventListener('click', async () => {
       tierAccess,
       pricing,
       rpmEnabled: $('smRpmEnabled').checked,
-      capabilities: Array.from(
-        document.querySelectorAll('#smCaps input[type="checkbox"]:checked'))
-        .map((el) => String(el.value)),
+      // Kemampuan terdeteksi otomatis oleh Worker — tidak dikirim dari sini.
+      vendor: $('smVendor') ? $('smVendor').value : 'auto',
       enabled: $('smEnabled').checked,
     });
     await loadGatewayData(true);
@@ -3274,10 +3324,6 @@ function providerModelRowHtml(model) {
   const m = model || {};
   const pricing = m.pricing || {};
   const id = 'apm_' + (++apiModelSeq);
-  const caps = Array.isArray(m.capabilities) ? m.capabilities : ['text'];
-  const cap = (value, label) =>
-    '<label class="ap-on"><input type="checkbox" data-f="cap:' + value + '"' +
-    (caps.includes(value) ? ' checked' : '') + '> ' + label + '</label>';
   return '<div class="ap-model-row" data-row="' + id + '">' +
     input('name', 'text', m.name || '', ' placeholder="Nama model"') +
     input('modelId', 'text', m.modelId || '',
@@ -3294,15 +3340,11 @@ function providerModelRowHtml(model) {
     '<button type="button" data-ap-remove-row="' + id +
     '" class="danger" title="Hapus model">×</button>' +
     '<div class="ap-caps" style="grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:6px 14px;padding:4px 0 2px;border-top:1px dashed var(--line);margin-top:4px">' +
-      '<div style="width:100%;font-size:10.5px;color:var(--muted);margin-bottom:2px">Kemampuan terdeteksi otomatis dari provider/nama model (mis. gemini-hydrogen = teks+gambar+video, recraft = gambar) — centang manual hanya bila perlu.</div>' +
-      cap('text', 'Teks') +
-      cap('image', 'Gambar') +
-      cap('vision', 'Vision') +
-      cap('file', 'File') +
-      cap('pdf', 'PDF') +
-      cap('tools', 'Tools') +
-      cap('audio', 'Audio') +
-      cap('video', 'Video') +
+      '<div style="width:100%;display:flex;align-items:center;gap:8px;margin-bottom:2px">' +
+        '<label style="margin:0;font-size:11px;color:var(--muted);white-space:nowrap">Vendor</label>' +
+        '<select data-f="vendor" style="flex:1">' + vendorOptions(m.vendor) + '</select>' +
+      '</div>' +
+      '<div style="width:100%;font-size:10.5px;color:var(--muted)">Kemampuan terdeteksi otomatis dari metadata/nama model (Teks, Gambar, Vision, Video, Audio) — tidak perlu diatur manual.</div>' +
     '</div>' +
     '</div>';
 }
@@ -3317,12 +3359,6 @@ function collectProviderModels() {
   return rows.map((row) => {
     const get = (field) => row.querySelector('[data-f="' + field + '"]');
     const checked = (field) => !!(get(field) && get(field).checked);
-    const caps = [];
-    for (const cap of ['text', 'image', 'vision', 'file', 'pdf', 'tools',
-                       'audio', 'video']) {
-      if (checked('cap:' + cap)) caps.push(cap);
-    }
-    if (!caps.length) caps.push('text');
     return {
       name: get('name').value.trim(),
       modelId: get('modelId').value.trim(),
@@ -3335,7 +3371,8 @@ function collectProviderModels() {
       },
       rpmEnabled: checked('rpmEnabled'),
       enabled: checked('enabled'),
-      capabilities: caps,
+      // Kemampuan terdeteksi otomatis oleh Worker — tidak dikirim dari sini.
+      vendor: (get('vendor') || {}).value || 'auto',
     };
   }).filter((m) => m.modelId);
 }
@@ -3531,6 +3568,7 @@ function renderApiProviders() {
         (on ? 'tampil' : 'disembunyikan') + '</span>' +
         '<span class="tag ' + (m.rpmEnabled !== false ? 'on' : 'info') + '">' +
         (m.rpmEnabled !== false ? 'RPM' : 'bebas RPM') + '</span>' +
+        '<span class="tag info">' + escapeHtml(vendorLabel(m.vendor)) + '</span>' +
         '<div class="meta mono">' + escapeHtml(m.modelId || '-') + '</div>' +
         '<div class="meta">tier ' + escapeHtml(tiers) + '</div>' +
         capabilityChips(m) +
