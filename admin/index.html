@@ -33,7 +33,13 @@
   }
   input:focus, select:focus { outline: 1px solid var(--accent); }
   .row { display: flex; gap: 12px; }
-  .row > div { flex: 1; }
+  .row > div { flex: 1; min-width: 0; }
+  textarea {
+    width: 100%; padding: 9px 10px; border-radius: 8px;
+    border: 1px solid var(--line); background: #0d1117; color: var(--text);
+    font: inherit; resize: vertical;
+  }
+  textarea:focus { outline: 1px solid var(--accent); }
   button {
     padding: 9px 16px; border-radius: 8px; border: 1px solid var(--line);
     background: #21262d; color: var(--text); font: inherit; cursor: pointer;
@@ -355,6 +361,21 @@
   }
   dialog::backdrop { background: rgba(0, 0, 0, .6); }
   dialog h2 { margin-bottom: 4px; }
+
+  /* Responsif: form provider & tabel model enak dipakai di HP maupun desktop. */
+  @media (max-width: 760px) {
+    .wrap { padding: 12px; }
+    .row { flex-direction: column; gap: 8px; }
+    .row > div { width: 100%; }
+    .ap-model-toolbar { flex-wrap: wrap; }
+    .ap-model-toolbar input { min-width: 100%; }
+    .ap-model-scroll { max-height: 240px; }
+    .ap-model-head, .ap-model-row { min-width: 760px; }
+    button { padding: 8px 12px; }
+  }
+  @media (min-width: 1400px) {
+    .ap-model-scroll { max-height: 420px; }
+  }
 </style>
 </head>
 <body>
@@ -404,6 +425,9 @@
         <button class="nav-item" data-view="bot">
           <span class="ico">⚙</span> API bot</button>
         <span class="nav-label" style="margin-top:10px">Monitoring</span>
+        <button class="nav-item" data-view="health">
+          <span class="nav-icon">◉</span><span class="nav-label">Health &amp; usage</span>
+        </button>
         <button class="nav-item" data-view="devices">
           <span class="ico">▦</span> Perangkat &amp; IP</button>
         <button class="nav-item" data-view="logs">
@@ -807,6 +831,15 @@ async with aiohttp.ClientSession() as session:<br>
       </div>
       <div class="row">
         <div>
+          <label for="apPool">Pool routing (tier)</label>
+          <select id="apPool">
+            <option value="free">Free Pool — user Free / Guest</option>
+            <option value="paid">Paid Gateway Pool — user VIP / PRO</option>
+            <option value="local">Self-Hosted / Local AI</option>
+          </select>
+          <div class="hint">Dipakai bila beberapa provider menyediakan model yang sama.</div>
+        </div>
+        <div>
           <label for="apGatewayId">Gateway ID Cloudflare (opsional)</label>
           <input type="text" id="apGatewayId" placeholder="default">
           <div class="hint">Dikirim sebagai header
@@ -999,6 +1032,18 @@ async with aiohttp.ClientSession() as session:<br>
       </div>
       <div class="status" id="modelDialogStatus"></div>
     </dialog>
+
+    <section class="view" id="view-health">
+      <h2>Health &amp; usage</h2>
+      <p class="hint">Ringkasan pemakaian hari ini dan status pool key tiap provider.</p>
+      <div class="stats" id="healthStats"></div>
+      <h3 style="margin-top:16px">Provider &amp; key pool</h3>
+      <div class="table-scroll"><table id="healthProviders">
+        <thead><tr><th>Provider</th><th>Pool</th><th>Status</th><th>Jumlah key</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+      <p class="hint" id="healthStatus"></p>
+    </section>
 
     <section class="view" id="view-logs">
     <div class="card">
@@ -1269,6 +1314,19 @@ async with aiohttp.ClientSession() as session:<br>
       </div>
       <div class="status" id="sysPromptStatus"></div>
     </div>
+    <div class="card" style="margin-top:14px">
+      <h2>Privasi &amp; anti-abuse</h2>
+      <label class="switch" style="margin-top:6px">
+        <input type="checkbox" id="cfgZdr" checked>
+        <span>Mode ZDR — log hanya metadata, isi prompt tidak disimpan</span>
+      </label>
+      <label for="cfgIpRpm">Batas request per IP per menit (0 = otomatis per tier)</label>
+      <input type="number" id="cfgIpRpm" min="0" max="600" value="0">
+      <div style="margin-top:10px">
+        <button class="primary" id="savePrivacyConfig">Simpan pengaturan</button>
+      </div>
+      <div class="status" id="privacyStatus"></div>
+    </div>
     </section>
 
     <section class="view" id="view-update">
@@ -1349,6 +1407,7 @@ const ADMIN_VIEWS = {
   plans: 'Subscribe & ACC',
   orderlogs: 'Log ACC',
   bot: 'API bot',
+  health: 'Health & usage',
   logs: 'Log',
   devices: 'Perangkat & IP',
   prompt: 'System prompt',
@@ -1376,6 +1435,8 @@ function showView(name) {
     }
     updateApiEndpointPreview();
     loadApiProviders();
+  } else if (name === 'health') {
+    loadHealthMetrics();
   } else if (name === 'logs') {
     loadApiKeyLogs();
     loadUsageLogs();
@@ -1850,6 +1911,8 @@ async function loadConfig() {
     ? 'Tersimpan — kosongkan = tidak diubah' : 'Kosongkan = tanpa proteksi key';
   fillTierSelects();
   $('sysPrompt').value = config.systemPrompt || '';
+  $('cfgZdr').checked = config.zdrMode !== false;
+  $('cfgIpRpm').value = config.ipRpm || 0;
   $('sysPromptHint').innerHTML = config.systemPrompt
     ? 'Aktif — ' + config.systemPrompt.length + ' karakter. Prompt ini '
       + 'menimpa prompt bawaan aplikasi.'
@@ -2379,6 +2442,20 @@ async function saveSystemPrompt(value) {
 
 $('saveSystemPrompt').addEventListener('click', () => {
   saveSystemPrompt($('sysPrompt').value.trim());
+});
+
+$('savePrivacyConfig').addEventListener('click', async () => {
+  try {
+    await api('PATCH', '/api/admin/config', {
+      zdrMode: $('cfgZdr').checked,
+      ipRpm: Number($('cfgIpRpm').value) || 0,
+    });
+    await loadConfig();
+    setStatus($('privacyStatus'),
+      'Pengaturan privasi & batas IP disimpan.', true);
+  } catch (e) {
+    setStatus($('privacyStatus'), String(e.message || e), false);
+  }
 });
 
 $('clearSystemPrompt').addEventListener('click', () => {
@@ -3522,6 +3599,7 @@ function providerFormValues() {
       .map((line) => line.trim()).filter(Boolean),
     gatewayId: $('apGatewayId').value.trim(),
     format: $('apFormat').value,
+    pool: $('apPool').value,
     models: collectProviderModels(),
     tierAccess: [
       $('apTierFree').checked ? 'free' : '',
@@ -3543,6 +3621,7 @@ function resetApiProviderForm() {
   $('apApiKeys').value = '';
   $('apGatewayId').value = '';
   $('apFormat').value = 'auto';
+  $('apPool').value = 'free';
   $('apTierFree').checked = true;
   $('apTierPro').checked = true;
   $('apTierVip').checked = true;
@@ -3571,6 +3650,7 @@ function editApiProvider(id) {
     : 'Satu key per baris — dipakai otomatis saat 429/5xx/timeout';
   $('apGatewayId').value = p.gatewayId || '';
   $('apFormat').value = p.format || 'auto';
+  $('apPool').value = p.pool || 'free';
   const tiers = p.tierAccess || ['free', 'pro', 'vip'];
   $('apTierFree').checked = tiers.includes('free');
   $('apTierPro').checked = tiers.includes('pro');
@@ -3652,6 +3732,33 @@ async function saveProvider(payload) {
   await api('POST', '/api/admin/api-providers', payload);
   await loadApiProviders();
   await loadGatewayData(true).catch(() => {});
+}
+
+async function loadHealthMetrics() {
+  try {
+    const data = await api('GET', '/api/admin/metrics');
+    const fmt = (n) => Number(n || 0).toLocaleString('id-ID');
+    $('healthStats').innerHTML = [
+      ['Request hari ini', fmt(data.requests)],
+      ['Token input', fmt(data.promptTokens)],
+      ['Token output', fmt(data.completionTokens)],
+      ['Kredit terpakai', fmt(data.credits)],
+      ['Error', fmt(data.errors)],
+      ['Pemasukan order', fmt(data.income)],
+    ].map(([label, value]) =>
+      '<div class="stat"><b>' + value + '</b><span>' + label + '</span></div>'
+    ).join('');
+    $('healthProviders').querySelector('tbody').innerHTML =
+      (data.providers || []).map((p) =>
+        '<tr><td>' + escapeHtml(p.name || p.id) + '</td>' +
+        '<td>' + escapeHtml(p.pool || 'free') + '</td>' +
+        '<td>' + (p.enabled ? 'Aktif' : 'Nonaktif') + '</td>' +
+        '<td>' + Number(p.keyPoolSize || 0) + '</td></tr>'
+      ).join('') || '<tr><td colspan="4">Belum ada provider.</td></tr>';
+    setStatus($('healthStatus'), 'Diperbarui: ' + data.today, true);
+  } catch (error) {
+    setStatus($('healthStatus'), String(error.message || error), false);
+  }
 }
 
 async function loadApiProviders() {
