@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
   <!--
     If you are serving your web app in a path other than the root, change the
@@ -17,47 +17,117 @@
   <base href="/">
 
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="AI-Agent PiercingBlow — private local and cloud AI chat.">
+  <meta name="description" content="PiercingBlow AI — asisten AI multi-model & gateway API. Chat AI privat (lokal/cloud), agen coding, pencarian web, dan akses API dengan kuota transparan.">
+  <meta name="theme-color" content="#4f8cff">
+  <meta name="robots" content="index, follow">
+
+  <!-- Open Graph / social preview -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="PiercingBlow AI">
+  <meta property="og:title" content="PiercingBlow AI — Multi-Model AI Agent & API Gateway">
+  <meta property="og:description" content="Chat AI privat, agen coding, dan gateway API multi-model dengan kuota transparan. Coba gratis di PiercingBlow AI.">
+  <meta property="og:url" content="https://piercingblow.ai.id/">
+  <meta property="og:image" content="https://piercingblow.ai.id/icons/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="1200">
+  <meta property="og:locale" content="id_ID">
+
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="PiercingBlow AI — Multi-Model AI Agent & API Gateway">
+  <meta name="twitter:description" content="Chat AI privat, agen coding, dan gateway API multi-model dengan kuota transparan.">
+  <meta name="twitter:image" content="https://piercingblow.ai.id/icons/og-image.png">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="AI-Agent PiercingBlow">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="PiercingBlow AI">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  <!-- Favicon (branding: binary logo PiercingBlow) -->
+  <link rel="icon" type="image/png" sizes="64x64" href="favicon.png"/>
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/Icon-192.png"/>
+  <link rel="icon" type="image/png" sizes="512x512" href="icons/Icon-512.png"/>
 
-  <title>AI-Agent PiercingBlow</title>
+  <title>PiercingBlow AI — Multi-Model AI Agent & API Gateway</title>
   <link rel="manifest" href="manifest.json">
+
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; background: #0e1116; }
+    /* Loading screen — ditampilkan sampai canvas Flutter terpasang.
+       Mencegah layar putih/hitam kosong saat bundle belum selesai dimuat. */
+    #pb-loading {
+      position: fixed; inset: 0; z-index: 9999;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 18px;
+      background: radial-gradient(circle at 50% 40%, #191f2e 0%, #0e1116 65%);
+      color: #e8edf7; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      transition: opacity .35s ease;
+    }
+    #pb-loading.hide { opacity: 0; pointer-events: none; }
+    #pb-loading img {
+      width: 96px; height: 96px; border-radius: 24px;
+      box-shadow: 0 16px 50px rgba(79,140,255,.28);
+    }
+    #pb-loading .pb-title { font-size: 16px; font-weight: 650; letter-spacing: .2px; }
+    #pb-loading .pb-sub { font-size: 12px; color: #8b93a7; margin-top: -12px; }
+    .pb-spinner {
+      width: 26px; height: 26px; border-radius: 50%;
+      border: 2.5px solid rgba(255,255,255,.14);
+      border-top-color: #4f8cff;
+      animation: pb-spin .8s linear infinite;
+    }
+    @keyframes pb-spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) {
+      .pb-spinner { animation-duration: 2s; }
+      #pb-loading { transition: none; }
+    }
+  </style>
 </head>
 <body>
+  <div id="pb-loading" aria-label="Memuat PiercingBlow AI">
+    <img src="icons/Icon-192.png" alt="PiercingBlow AI">
+    <div class="pb-title">PiercingBlow AI</div>
+    <div class="pb-sub">Menyiapkan model &amp; workspace…</div>
+    <div class="pb-spinner"></div>
+  </div>
+
   <script src="flutter_bootstrap.js" async></script>
   <script>
     // On some embedded/occluded windows the Flutter engine receives a
     // zero-sized surface during startup and never schedules the first frame,
     // leaving a blank page until the user resizes the window. Nudge the engine
-    // with resize events until its canvas is attached.
+    // with resize events until its canvas is attached. The same hook hides the
+    // branded loading overlay once the first canvas exists.
     (function () {
       var attempts = 0;
       var running = false;
+      var hidden = false;
       function hasCanvas() {
         var pane = document.querySelector('flt-glass-pane');
         return !!(pane && pane.shadowRoot &&
             pane.shadowRoot.querySelector('canvas'));
       }
+      function hideLoader() {
+        if (hidden) return;
+        hidden = true;
+        var el = document.getElementById('pb-loading');
+        if (!el) return;
+        el.classList.add('hide');
+        setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 450);
+      }
       function tick() {
-        if (hasCanvas() || attempts >= 600) {
-          running = false;
-          return;
-        }
+        if (hasCanvas()) { hideLoader(); running = false; return; }
+        if (attempts >= 600) { hideLoader(); running = false; return; }
         attempts++;
         window.dispatchEvent(new Event('resize'));
         setTimeout(tick, 500);
       }
       function kick() {
-        if (running) return;
+        if (running || hidden) return;
         running = true;
         attempts = 0;
         setTimeout(tick, 150);
@@ -66,6 +136,8 @@
       document.addEventListener('visibilitychange', function () {
         if (document.visibilityState === 'visible') kick();
       });
+      // Fallback: jangan pernah biarkan overlay menutupi UI selamanya.
+      setTimeout(hideLoader, 10000);
       kick();
     })();
   </script>

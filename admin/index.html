@@ -294,6 +294,14 @@
   /* Editor model per provider API: tabel ringkas, scroll horizontal di layar
      sempit supaya field harga tetap terbaca. */
   .ap-models { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+  .ap-model-toolbar {
+    display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+    border-bottom: 1px solid var(--line); background: #12171e;
+  }
+  .ap-model-toolbar input { flex: 1; min-width: 160px; }
+  /* Model yang sudah di-input tidak membuat halaman panjang ke bawah. */
+  .ap-model-scroll { max-height: 300px; overflow-y: auto; overscroll-behavior: contain; }
+  .ap-model-row.filtered-out { display: none; }
   .ap-model-head, .ap-model-row {
     display: grid; min-width: 820px; gap: 6px; align-items: center;
     grid-template-columns: 1.4fr 1.6fr .62fr .62fr .62fr .62fr .5fr .42fr 34px;
@@ -776,6 +784,14 @@ async with aiohttp.ClientSession() as session:<br>
                  placeholder="Bearer token provider">
           <div class="hint" id="apApiKeyHint">Disimpan di server (KV), tidak
             pernah dikirim ke aplikasi.</div>
+          <label for="apApiKeys" style="margin-top:8px">API key cadangan (opsional)</label>
+          <textarea id="apApiKeys" rows="3"
+                    placeholder="Satu key per baris — dipakai otomatis saat 429/5xx/timeout"></textarea>
+          <div class="hint">Key utama + cadangan membentuk pool rotasi. Model tetap sama.</div>
+          <button type="button" id="discoverProviderModels" style="margin-top:8px">
+            Ambil semua model dari provider
+          </button>
+          <div class="hint" id="discoverModelsStatus"></div>
         </div>
         <div>
           <label for="apFormat">Jenis API</label>
@@ -846,7 +862,14 @@ async with aiohttp.ClientSession() as session:<br>
           <span>On</span>
           <span></span>
         </div>
-        <div id="apModelRows"></div>
+        <div class="ap-model-toolbar">
+          <input type="text" id="apModelSearch"
+                 placeholder="Cari model yang sudah ditambahkan…">
+          <span class="hint" id="apModelCount" style="margin:0;white-space:nowrap"></span>
+        </div>
+        <div class="ap-model-scroll">
+          <div id="apModelRows"></div>
+        </div>
       </div>
       <div style="margin-top:8px">
         <button type="button" id="addApiModel">+ Tambah model</button>
@@ -3351,6 +3374,22 @@ function providerModelRowHtml(model) {
 
 function appendProviderModelRow(model) {
   $('apModelRows').insertAdjacentHTML('beforeend', providerModelRowHtml(model));
+  refreshApModelListMeta();
+}
+
+/// Filter visual daftar model yang sudah ditambahkan (tanpa menghapus baris).
+function refreshApModelListMeta() {
+  const rows = Array.from($('apModelRows').querySelectorAll('.ap-model-row'));
+  const query = ($('apModelSearch').value || '').trim().toLowerCase();
+  let visible = 0;
+  for (const row of rows) {
+    const match = !query || (row.textContent || '').toLowerCase().includes(query);
+    row.classList.toggle('filtered-out', !match);
+    if (match) visible++;
+  }
+  $('apModelCount').textContent = rows.length
+    ? visible + ' / ' + rows.length + ' model'
+    : 'Belum ada model';
 }
 
 function collectProviderModels() {
@@ -3479,6 +3518,8 @@ function providerFormValues() {
     name: $('apName').value.trim(),
     baseUrl: $('apBaseUrl').value.trim(),
     apiKey: $('apApiKey').value.trim(),
+    apiKeys: $('apApiKeys').value.split('\n')
+      .map((line) => line.trim()).filter(Boolean),
     gatewayId: $('apGatewayId').value.trim(),
     format: $('apFormat').value,
     models: collectProviderModels(),
@@ -3499,6 +3540,7 @@ function resetApiProviderForm() {
   $('apBaseUrl').value = '';
   $('apApiKey').value = '';
   $('apApiKey').placeholder = 'Bearer token provider';
+  $('apApiKeys').value = '';
   $('apGatewayId').value = '';
   $('apFormat').value = 'auto';
   $('apTierFree').checked = true;
@@ -3523,6 +3565,10 @@ function editApiProvider(id) {
   $('apApiKey').value = '';
   $('apApiKey').placeholder = p.hasApiKey
     ? 'Tersimpan — kosongkan = tidak diubah' : 'Bearer token provider';
+  $('apApiKeys').value = '';
+  $('apApiKeys').placeholder = (p.keyPoolSize || 0) > 1
+    ? `${p.keyPoolSize} key tersimpan — kosongkan = tidak diubah`
+    : 'Satu key per baris — dipakai otomatis saat 429/5xx/timeout';
   $('apGatewayId').value = p.gatewayId || '';
   $('apFormat').value = p.format || 'auto';
   const tiers = p.tierAccess || ['free', 'pro', 'vip'];
@@ -3619,6 +3665,44 @@ async function loadApiProviders() {
 }
 
 $('addApiModel').addEventListener('click', () => appendProviderModelRow({}));
+$('apModelSearch').addEventListener('input', refreshApModelListMeta);
+
+// Ambil otomatis SEMUA model yang tersedia dari provider (base URL + key).
+$('discoverProviderModels').addEventListener('click', async () => {
+  const status = $('discoverModelsStatus');
+  const baseUrl = $('apBaseUrl').value.trim();
+  const apiKey = $('apApiKey').value.trim();
+  if (!/^https?:\/\//i.test(baseUrl) || !apiKey) {
+    setStatus(status,
+      'Isi Base URL (http/https) dan API key dulu untuk mengambil daftar model.',
+      false);
+    return;
+  }
+  setStatus(status, 'Mengambil daftar model dari provider…', true);
+  try {
+    const data = await api('POST', '/api/admin/api-providers/discover-models', {
+      baseUrl,
+      apiKey,
+      format: $('apFormat').value,
+      gatewayId: $('apGatewayId').value.trim(),
+    });
+    const models = data.models || [];
+    if (!models.length) {
+      setStatus(status, 'Provider tidak mengembalikan daftar model.', false);
+      return;
+    }
+    $('apModelRows').innerHTML = '';
+    for (const id of models) {
+      appendProviderModelRow({ name: id, modelId: id });
+    }
+    refreshApModelListMeta();
+    updateApiEndpointPreview();
+    setStatus(status, 'Berhasil mengambil ' + models.length + ' model. '
+      + 'Harga & RPM bisa disesuaikan per baris.', true);
+  } catch (error) {
+    setStatus(status, String(error.message || error), false);
+  }
+});
 
 // URL akhir yang dipanggil mengikuti base URL + tipe API + model pertama.
 $('apBaseUrl').addEventListener('input', updateApiEndpointPreview);
@@ -3637,6 +3721,7 @@ $('apModelRows').addEventListener('click', (ev) => {
   if (!$('apModelRows').querySelector('.ap-model-row')) {
     appendProviderModelRow({});
   }
+  refreshApModelListMeta();
 });
 
 $('saveApiProvider').addEventListener('click', async () => {
