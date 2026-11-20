@@ -1074,6 +1074,29 @@ async with aiohttp.ClientSession() as session:<br>
           <div class="hint">Dihitung dari token jawaban yang dihasilkan.</div>
         </div>
       </div>
+      <div class="row" style="margin-top:12px">
+        <div>
+          <label for="smOutputMode">Mode alokasi output</label>
+          <select id="smOutputMode">
+            <option value="auto">Auto (4k–16k, disarankan)</option>
+            <option value="manual">Manual (maks 32k)</option>
+          </select>
+          <div class="hint">Auto memberi ruang thinking + jawaban; manual dipatuksi
+            admin lalu di-clamp sesuai sisa context.</div>
+        </div>
+        <div>
+          <label for="smMaxOutputManual">Max output manual</label>
+          <input type="number" id="smMaxOutputManual" min="0" max="32768"
+                 step="512" placeholder="0 = ikut auto">
+          <div class="hint">Kosongkan/0 untuk Auto. Reasoning minimal 4096.</div>
+        </div>
+      </div>
+      <div style="margin-top:8px">
+        <label style="display:flex;align-items:center;gap:6px;color:var(--text);margin:0">
+          <input type="checkbox" id="smReasoning">
+          Model reasoning / thinking (butuh output ≥ 4096)
+        </label>
+      </div>
       <div style="margin-top:12px">
         <label style="display:flex;align-items:center;gap:6px;color:var(--text);margin:0">
           <input type="checkbox" id="smEnabled" checked>
@@ -3131,6 +3154,19 @@ function fillModelFormFrom(model) {
   if (smVendor) smVendor.value = model && model.vendor ? model.vendor : 'auto';
   // Context & max output diisi otomatis oleh Worker dari `/props` server saat
   // deteksi model. Nilainya hanya bisa diubah manual di kode bila perlu.
+  const smOutputMode = $('smOutputMode');
+  if (smOutputMode) {
+    smOutputMode.value = (model && model.outputMode) || 'auto';
+  }
+  const smMaxManual = $('smMaxOutputManual');
+  if (smMaxManual) {
+    const configured = model ? Number(model.maxOutput) || 0 : 0;
+    smMaxManual.value = configured > 32768 ? 16384 : configured;
+  }
+  const smReasoning = $('smReasoning');
+  if (smReasoning) {
+    smReasoning.checked = !!(model && (model.reasoning || model.thinking));
+  }
   const autoLimits = $('smAutoLimits');
   if (autoLimits) {
     autoLimits.innerHTML = model
@@ -3380,9 +3416,13 @@ $('saveModelEntry').addEventListener('click', async () => {
     return;
   }
   const model = serverModels.find((m) => String(m.modelId) === String(modelId));
-  // Context & max output diisi worker dari /props server saat deteksi model.
+  // Context diisi worker dari /props server; output mengikuti mode Auto/Manual.
   const ctx = model ? Number(model.contextSize) || 0 : 0;
-  const max = model ? Number(model.maxOutput) || 0 : 0;
+  const outputMode = ($('smOutputMode') || {}).value || 'auto';
+  const rawMax = Number(($('smMaxOutputManual') || {}).value) || 0;
+  const max = outputMode === 'manual'
+    ? Math.min(32768, Math.max(0, rawMax))
+    : (model ? Number(model.maxOutput) || 0 : 0);
   // Satu mode harga saja: /req (flat), /1M (token), atau gratis.
   const mode = pricingMode();
   const pricing = {
@@ -3401,6 +3441,8 @@ $('saveModelEntry').addEventListener('click', async () => {
       // nilai lama kalau field ini tidak dikirim.
       contextSize: ctx,
       maxOutput: max,
+      outputMode,
+      reasoning: !!($('smReasoning') && $('smReasoning').checked),
       tierAccess,
       pricing,
       rpmEnabled: $('smRpmEnabled').checked,
@@ -3545,7 +3587,20 @@ function providerModelRowHtml(model) {
         '<label style="margin:0;font-size:11px;color:var(--muted);white-space:nowrap">Vendor</label>' +
         '<select data-f="vendor" style="flex:1">' + vendorOptions(m.vendor) + '</select>' +
       '</div>' +
-      '<div style="width:100%;font-size:10.5px;color:var(--muted)">Kemampuan terdeteksi otomatis dari metadata/nama model (Teks, Gambar, Vision, Video, Audio) — tidak perlu diatur manual.</div>' +
+      '<div style="width:100%;display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px">' +
+        '<label style="margin:0;font-size:11px;color:var(--muted);white-space:nowrap">Mode output</label>' +
+        '<select data-f="outputMode" style="width:auto;min-width:150px">' +
+          '<option value="auto"' + (m.outputMode !== 'manual' ? ' selected' : '') + '>Auto (aman, 4k–16k)</option>' +
+          '<option value="manual"' + (m.outputMode === 'manual' ? ' selected' : '') + '>Manual</option>' +
+        '</select>' +
+        '<label style="margin:0;font-size:11px;color:var(--muted);white-space:nowrap">Max output</label>' +
+        '<input type="number" data-f="maxOutput" min="0" step="512" ' +
+          'value="' + escapeAttr((m.maxOutput && m.maxOutput > 235929 ? 16384 : (m.maxOutput || 0))) + '" ' +
+          'placeholder="0 = otomatis" style="width:120px">' +
+        '<label style="margin:0;font-size:11px;color:var(--muted);display:flex;align-items:center;gap:4px">' +
+          '<input type="checkbox" data-f="reasoning"' + (m.reasoning ? ' checked' : '') + '> Reasoning / thinking</label>' +
+      '</div>' +
+      '<div style="width:100%;font-size:10.5px;color:var(--muted)">Auto memakai 80% sisa context (maks 16k; reasoning minimal 4k). Manual dibatasi maks 32k &amp; sisa context. Kemampuan model terdeteksi otomatis.</div>' +
     '</div>' +
     '</div>';
 }
@@ -3588,6 +3643,10 @@ function collectProviderModels() {
       },
       rpmEnabled: checked('rpmEnabled'),
       enabled: checked('enabled'),
+      outputMode: (get('outputMode') || {}).value || 'auto',
+      maxOutput: Math.min(32768, Math.max(0,
+        Number((get('maxOutput') || {}).value) || 0)),
+      reasoning: checked('reasoning'),
       // Kemampuan terdeteksi otomatis oleh Worker — tidak dikirim dari sini.
       vendor: (get('vendor') || {}).value || 'auto',
     };
