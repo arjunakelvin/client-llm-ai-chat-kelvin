@@ -311,6 +311,52 @@
   /* Daftar provider terdaftar tidak membuat halaman panjang di HP/desktop. */
   .api-provider-scroll { max-height: 340px; overflow-y: auto; overscroll-behavior: contain; }
   .ap-provider-card.filtered-out { display: none; }
+
+  /* Statistik Health & usage */
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px,1fr)); gap: 10px; margin: 12px 0; }
+  .kpi {
+    background: #12171e; border: 1px solid var(--line); border-radius: 12px;
+    padding: 13px 14px; display: flex; gap: 11px; align-items: center;
+  }
+  .kpi-icon {
+    width: 36px; height: 36px; border-radius: 10px; flex: 0 0 auto;
+    display: grid; place-items: center; font-size: 17px;
+    background: rgba(79,140,255,.14); color: #7db1ff;
+  }
+  .kpi.green .kpi-icon { background: rgba(48,196,107,.14); color: #4ad991; }
+  .kpi.amber .kpi-icon { background: rgba(245,165,36,.14); color: #f5bd66; }
+  .kpi.red .kpi-icon { background: rgba(229,72,77,.14); color: #ff8489; }
+  .kpi b { display: block; font-size: 17px; font-weight: 650; line-height: 1.2; }
+  .kpi span { font-size: 11px; color: var(--muted); }
+  .revenue-hero {
+    margin: 12px 0; padding: 18px 20px; border-radius: 14px;
+    background: linear-gradient(120deg, #16233a 0%, #12171e 70%);
+    border: 1px solid rgba(79,140,255,.28);
+    display: flex; flex-wrap: wrap; gap: 18px; align-items: center;
+    justify-content: space-between;
+  }
+  .revenue-hero .label { font-size: 11px; color: var(--muted); letter-spacing: .4px; text-transform: uppercase; }
+  .revenue-hero .amount {
+    font-size: 30px; font-weight: 700; color: #dff0ff; line-height: 1.15;
+    font-variant-numeric: tabular-nums;
+  }
+  .revenue-hero .sub { font-size: 11.5px; color: #9fb2cc; margin-top: 4px; }
+  .chart-card { margin: 12px 0; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: #12171e; }
+  .chart-row {
+    display: grid; grid-template-columns: 64px 1fr 54px; gap: 8px;
+    align-items: center; margin: 6px 0; font-size: 11px;
+  }
+  .chart-track { height: 9px; background: #20262f; border-radius: 99px; overflow: hidden; }
+  .chart-bar { height: 100%; border-radius: 99px; background: linear-gradient(90deg,#4f8cff,#7db1ff); min-width: 2px; }
+  .chart-bar.tokens { background: linear-gradient(90deg,#30c46b,#7ee0a8); }
+  .chart-value { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .legend { display: flex; gap: 14px; margin-bottom: 10px; font-size: 11px; color: var(--muted); }
+  .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 3px; margin-right: 5px; }
+  @media (max-width: 760px) {
+    .kpi-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .kpi b { font-size: 14px; }
+    .revenue-hero .amount { font-size: 24px; }
+  }
   .ap-model-head, .ap-model-row {
     display: grid; min-width: 820px; gap: 6px; align-items: center;
     grid-template-columns: 1.4fr 1.6fr .62fr .62fr .62fr .62fr .5fr .42fr 34px;
@@ -1045,8 +1091,38 @@ async with aiohttp.ClientSession() as session:<br>
 
     <section class="view" id="view-health">
       <h2>Health &amp; usage</h2>
-      <p class="hint">Ringkasan pemakaian hari ini dan status pool key tiap provider.</p>
-      <div class="stats" id="healthStats"></div>
+      <p class="hint">Statistik pemakaian &amp; pendapatan — data 7 hari terakhir dari gateway.</p>
+
+      <div class="revenue-hero">
+        <div>
+          <div class="label">Pendapatan terkumpul</div>
+          <div class="amount" id="healthIncome">Rp 0</div>
+          <div class="sub" id="healthIncomeSub">0 order disetujui · 0 menunggu</div>
+        </div>
+        <div>
+          <div class="label">Estimasi biaya upstream</div>
+          <div class="amount" id="healthCost" style="font-size:22px">—</div>
+          <div class="sub">Kredit yang dipotong dari user hari ini</div>
+        </div>
+      </div>
+
+      <div class="kpi-grid" id="healthStats"></div>
+
+      <div class="chart-card">
+        <div class="legend">
+          <span><i style="background:#4f8cff"></i>Request</span>
+          <span><i style="background:#30c46b"></i>Token</span>
+          <span style="margin-left:auto">7 hari terakhir</span>
+        </div>
+        <div id="healthChart"></div>
+      </div>
+
+      <h3 style="margin-top:16px">Model terpakai</h3>
+      <div class="table-scroll"><table id="healthModels">
+        <thead><tr><th>Model</th><th>Request</th><th>Token in</th><th>Token out</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+
       <h3 style="margin-top:16px">Provider &amp; key pool</h3>
       <div class="table-scroll"><table id="healthProviders">
         <thead><tr><th>Provider</th><th>Pool</th><th>Status</th><th>Jumlah key</th></tr></thead>
@@ -3780,16 +3856,69 @@ async function loadHealthMetrics() {
   try {
     const data = await api('GET', '/api/admin/metrics');
     const fmt = (n) => Number(n || 0).toLocaleString('id-ID');
+    const rupiah = (n) => new Intl.NumberFormat('id-ID', {
+      style: 'currency', currency: 'IDR', maximumFractionDigits: 0,
+    }).format(Number(n) || 0);
+    const compact = (n) => {
+      n = Number(n) || 0;
+      if (n >= 1000000) return (n / 1000000).toFixed(1) + 'jt';
+      if (n >= 1000) return (n / 1000).toFixed(1) + 'rb';
+      return String(n);
+    };
+    const errorRate = data.requests
+      ? (Number(data.errors || 0) / Number(data.requests) * 100)
+      : 0;
+
+    // Hero pendapatan
+    $('healthIncome').textContent = rupiah(data.income);
+    $('healthIncomeSub').textContent =
+      fmt(data.approvedOrders) + ' order disetujui · ' +
+      fmt(data.pendingOrders) + ' menunggu verifikasi';
+    $('healthCost').textContent = fmt(data.credits) + ' kredit';
+
+    // Kartu statistik
     $('healthStats').innerHTML = [
-      ['Request hari ini', fmt(data.requests)],
-      ['Token input', fmt(data.promptTokens)],
-      ['Token output', fmt(data.completionTokens)],
-      ['Kredit terpakai', fmt(data.credits)],
-      ['Error', fmt(data.errors)],
-      ['Pemasukan order', fmt(data.income)],
-    ].map(([label, value]) =>
-      '<div class="stat"><b>' + value + '</b><span>' + label + '</span></div>'
+      ['blue', '↗', fmt(data.requests), 'Request hari ini'],
+      ['green', '↓', compact(data.promptTokens), 'Token input'],
+      ['green', '↑', compact(data.completionTokens), 'Token output'],
+      ['red', '⚠', errorRate.toFixed(1) + '%', 'Tingkat error'],
+      ['amber', '♙', fmt(data.accountCount), 'Akun aktif'],
+      ['amber', '◇', fmt(data.credits), 'Kredit terpakai'],
+    ].map(([tone, icon, value, label]) =>
+      '<div class="kpi ' + tone + '">' +
+      '<div class="kpi-icon">' + icon + '</div>' +
+      '<div><b>' + escapeHtml(value) + '</b><span>' +
+      escapeHtml(label) + '</span></div></div>'
     ).join('');
+
+    // Grafik batang 7 hari (request & token)
+    const series = data.series || [];
+    const maxReq = Math.max(1, ...series.map((s) => Number(s.requests) || 0));
+    const maxTok = Math.max(1, ...series.map(
+      (s) => (Number(s.promptTokens) || 0) + (Number(s.completionTokens) || 0)));
+    $('healthChart').innerHTML = series.length ? series.map((s) => {
+      const reqPct = Math.max(2, (Number(s.requests) || 0) / maxReq * 100);
+      const tok = (Number(s.promptTokens) || 0) + (Number(s.completionTokens) || 0);
+      const tokPct = Math.max(2, tok / maxTok * 100);
+      const day = String(s.day || '').slice(5);
+      return '<div class="chart-row">' +
+        '<span class="mono">' + escapeHtml(day) + '</span>' +
+        '<div class="chart-track" style="display:flex;gap:2px">' +
+        '<div class="chart-bar" style="width:' + reqPct + '%"></div>' +
+        '<div class="chart-bar tokens" style="width:' + tokPct + '%"></div>' +
+        '</div>' +
+        '<span class="chart-value">' + fmt(s.requests) + '</span></div>';
+    }).join('') : '<div class="hint">Belum ada data pemakaian.</div>';
+
+    // Model terpakai
+    $('healthModels').querySelector('tbody').innerHTML =
+      (data.topModels || []).map((m) =>
+        '<tr><td>' + escapeHtml(m.name || m.modelId) + '</td>' +
+        '<td>' + fmt(m.requests) + '</td>' +
+        '<td>' + fmt(m.promptTokens) + '</td>' +
+        '<td>' + fmt(m.completionTokens) + '</td></tr>'
+      ).join('') || '<tr><td colspan="4">Belum ada pemakaian model.</td></tr>';
+
     $('healthProviders').querySelector('tbody').innerHTML =
       (data.providers || []).map((p) =>
         '<tr><td>' + escapeHtml(p.name || p.id) + '</td>' +
@@ -3797,7 +3926,9 @@ async function loadHealthMetrics() {
         '<td>' + (p.enabled ? 'Aktif' : 'Nonaktif') + '</td>' +
         '<td>' + Number(p.keyPoolSize || 0) + '</td></tr>'
       ).join('') || '<tr><td colspan="4">Belum ada provider.</td></tr>';
-    setStatus($('healthStatus'), 'Diperbarui: ' + data.today, true);
+    setStatus($('healthStatus'),
+      'Diperbarui ' + data.today + ' · ' + fmt(data.requests) +
+      ' request hari ini · ' + errorRate.toFixed(1) + '% error', true);
   } catch (error) {
     if (isMissingEndpoint(error)) {
       // Worker lama: pakai endpoint health yang sudah ada + daftar provider
@@ -3806,16 +3937,24 @@ async function loadHealthMetrics() {
       try {
         health = await api('GET', '/api/admin/health');
       } catch (_) {}
+      $('healthIncome').textContent = 'Rp 0';
+      $('healthIncomeSub').textContent = 'Menunggu worker versi terbaru';
+      $('healthCost').textContent = '— kredit';
+      $('healthChart').innerHTML =
+        '<div class="hint">Statistik tersedia setelah worker diperbarui.</div>';
+      $('healthModels').querySelector('tbody').innerHTML =
+        '<tr><td colspan="4">Belum ada data.</td></tr>';
       $('healthStats').innerHTML = [
-        ['Status worker', health && health.ok ? 'OK' : '—'],
-        ['Request hari ini', '—'],
-        ['Token input', '—'],
-        ['Token output', '—'],
-        ['Kredit terpakai', '—'],
-        ['Pemasukan order', '—'],
-      ].map(([label, value]) =>
-        '<div class="stat"><b>' + escapeHtml(String(value)) +
-        '</b><span>' + escapeHtml(label) + '</span></div>'
+        ['blue', '↗', '—', 'Request hari ini'],
+        ['green', '↓', '—', 'Token input'],
+        ['green', '↑', '—', 'Token output'],
+        ['red', '⚠', '—', 'Tingkat error'],
+        ['amber', '♙', health && health.ok ? 'OK' : '—', 'Status worker'],
+        ['amber', '◇', '—', 'Kredit terpakai'],
+      ].map(([tone, icon, value, label]) =>
+        '<div class="kpi ' + tone + '"><div class="kpi-icon">' + icon +
+        '</div><div><b>' + escapeHtml(String(value)) + '</b><span>' +
+        escapeHtml(label) + '</span></div></div>'
       ).join('');
       $('healthProviders').querySelector('tbody').innerHTML =
         (apiProviders || []).map((p) =>
