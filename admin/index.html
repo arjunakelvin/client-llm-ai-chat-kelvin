@@ -308,6 +308,9 @@
   /* Model yang sudah di-input tidak membuat halaman panjang ke bawah. */
   .ap-model-scroll { max-height: 300px; overflow-y: auto; overscroll-behavior: contain; }
   .ap-model-row.filtered-out { display: none; }
+  /* Daftar provider terdaftar tidak membuat halaman panjang di HP/desktop. */
+  .api-provider-scroll { max-height: 340px; overflow-y: auto; overscroll-behavior: contain; }
+  .ap-provider-card.filtered-out { display: none; }
   .ap-model-head, .ap-model-row {
     display: grid; min-width: 820px; gap: 6px; align-items: center;
     grid-template-columns: 1.4fr 1.6fr .62fr .62fr .62fr .62fr .5fr .42fr 34px;
@@ -917,8 +920,15 @@ async with aiohttp.ClientSession() as session:<br>
       <div class="status" id="apiProviderStatus"></div>
 
       <h3 style="margin-top:20px">Provider terdaftar</h3>
-      <div id="apiProviderList">
-        <div class="hint">Memuat provider…</div>
+      <div class="ap-model-toolbar">
+        <input type="text" id="apiProviderSearch"
+               placeholder="Cari provider, base URL, atau model…">
+        <span class="hint" id="apiProviderCount" style="margin:0;white-space:nowrap"></span>
+      </div>
+      <div class="api-provider-scroll">
+        <div id="apiProviderList">
+          <div class="hint">Memuat provider…</div>
+        </div>
       </div>
     </div>
     </section>
@@ -1422,8 +1432,13 @@ function showView(name) {
     el.classList.toggle('active', el.id === 'view-' + name);
   });
   document.querySelectorAll('.nav-item').forEach((el) => {
-    el.classList.toggle('active', el.dataset.view === name);
+    const active = el.dataset.view === name;
+    el.classList.toggle('active', active);
+    if (active) el.setAttribute('aria-current', 'page');
+    else el.removeAttribute('aria-current');
   });
+  const main = $('viewContainer') || $('viewTitle')?.closest('main');
+  if (main) main.scrollTop = 0;
   const title = $('viewTitle');
   if (title) title.textContent = ADMIN_VIEWS[name];
   sessionStorage.setItem('pb_admin_view', name);
@@ -1485,9 +1500,19 @@ async function api(method, path, body) {
   if (!res.ok) {
     const detail = (data && data.error) ||
       (text ? text.slice(0, 200) : ('HTTP ' + res.status));
-    throw new Error(detail);
+    const error = new Error(detail);
+    error.status = res.status;
+    throw error;
   }
   return data || {};
+}
+
+/// Worker lama belum punya endpoint fitur baru. Jangan tampilkan error mentah
+/// "Unknown admin endpoint" ke admin — beri petunjuk + pakai data fallback.
+function isMissingEndpoint(error) {
+  const message = String((error && error.message) || error || '').toLowerCase();
+  return (error && error.status === 404) ||
+    message.includes('unknown admin endpoint');
 }
 
 function tierOptions(selected) {
@@ -3672,13 +3697,29 @@ function editApiProvider(id) {
 function renderApiProviders() {
   const host = $('apiProviderList');
   if (!host) return;
+  const countEl = $('apiProviderCount');
+  if (countEl) countEl.textContent = apiProviders.length + ' provider';
   if (!apiProviders.length) {
     host.innerHTML = '<div class="hint">Belum ada provider API. Isi base URL + ' +
       'API key di form atas (mis. Cloudflare Workers AI), tambahkan model, ' +
       'lalu tekan <b>Simpan provider</b>.</div>';
     return;
   }
-  host.innerHTML = apiProviders.map((p) => {
+  const query = (($('apiProviderSearch') || {}).value || '').trim().toLowerCase();
+  const visible = query
+    ? apiProviders.filter((p) => {
+        const haystack = [
+          p.name, p.id, p.baseUrl, p.format, p.pool,
+          ...providerModelsOf(p).map((m) => m.name + ' ' + m.modelId),
+        ].join(' ').toLowerCase();
+        return haystack.includes(query);
+      })
+    : apiProviders;
+  if (countEl) {
+    countEl.textContent = visible.length + ' / ' + apiProviders.length +
+      ' provider';
+  }
+  host.innerHTML = visible.length ? visible.map((p) => {
     const enabled = p.enabled !== false;
     const tiers = (p.tierAccess || []).join(', ') || '-';
     const keyTag = p.hasApiKey
@@ -3704,7 +3745,7 @@ function renderApiProviders() {
         (on ? 'Matikan' : 'Aktifkan') + '</button>' +
         '</div></div>';
     }).join('');
-    return '<div class="ap-model-card">' +
+    return '<div class="ap-model-card ap-provider-card">' +
       '<div class="srv-head"><b>' + escapeHtml(p.name || p.id) + '</b> ' +
       '<span class="tag ' + (enabled ? 'on' : 'off') + '">' +
       (enabled ? 'provider aktif' : 'provider nonaktif') + '</span> ' +
@@ -3723,7 +3764,8 @@ function renderApiProviders() {
       '<button data-ap-edit="' + escapeAttr(p.id) + '">Edit provider</button>' +
       '<button data-ap-delete="' + escapeAttr(p.id) + '" class="danger">Hapus</button>' +
       '</div></div>';
-  }).join('');
+  }).join('') : '<div class="hint">Tidak ada provider yang cocok dengan "' +
+    escapeHtml(query) + '".</div>';
 }
 
 // Simpan perubahan cepat (mis. on/off satu model) dengan API key lama yang
@@ -3757,6 +3799,37 @@ async function loadHealthMetrics() {
       ).join('') || '<tr><td colspan="4">Belum ada provider.</td></tr>';
     setStatus($('healthStatus'), 'Diperbarui: ' + data.today, true);
   } catch (error) {
+    if (isMissingEndpoint(error)) {
+      // Worker lama: pakai endpoint health yang sudah ada + daftar provider
+      // dari halaman Provider API, tanpa error "Unknown admin endpoint".
+      let health = null;
+      try {
+        health = await api('GET', '/api/admin/health');
+      } catch (_) {}
+      $('healthStats').innerHTML = [
+        ['Status worker', health && health.ok ? 'OK' : '—'],
+        ['Request hari ini', '—'],
+        ['Token input', '—'],
+        ['Token output', '—'],
+        ['Kredit terpakai', '—'],
+        ['Pemasukan order', '—'],
+      ].map(([label, value]) =>
+        '<div class="stat"><b>' + escapeHtml(String(value)) +
+        '</b><span>' + escapeHtml(label) + '</span></div>'
+      ).join('');
+      $('healthProviders').querySelector('tbody').innerHTML =
+        (apiProviders || []).map((p) =>
+          '<tr><td>' + escapeHtml(p.name || p.id) + '</td>' +
+          '<td>' + escapeHtml(p.pool || 'free') + '</td>' +
+          '<td>' + (p.enabled === false ? 'Nonaktif' : 'Aktif') + '</td>' +
+          '<td>' + Number(p.keyPoolSize || 0) + '</td></tr>'
+        ).join('') || '<tr><td colspan="4">Buka menu Provider API untuk memuat daftar.</td></tr>';
+      setStatus($('healthStatus'),
+        'Monitor lengkap butuh worker versi terbaru. Deploy worker untuk '
+        + 'melihat request/token/profit. Status dasar: '
+        + (health && health.ok ? 'OK' : 'tidak tersedia'), false);
+      return;
+    }
     setStatus($('healthStatus'), String(error.message || error), false);
   }
 }
@@ -3807,6 +3880,13 @@ $('discoverProviderModels').addEventListener('click', async () => {
     setStatus(status, 'Berhasil mengambil ' + models.length + ' model. '
       + 'Harga & RPM bisa disesuaikan per baris.', true);
   } catch (error) {
+    if (isMissingEndpoint(error)) {
+      setStatus(status,
+        'Auto-discover belum tersedia di worker aktif. Deploy worker '
+        + 'versi terbaru, atau tambahkan model manual lewat "+ Tambah model".',
+        false);
+      return;
+    }
     setStatus(status, String(error.message || error), false);
   }
 });
@@ -3891,6 +3971,7 @@ $('testApiProvider').addEventListener('click', async () => {
 
 $('resetApiProviderForm').addEventListener('click', resetApiProviderForm);
 $('refreshApiProviders').addEventListener('click', loadApiProviders);
+$('apiProviderSearch').addEventListener('input', renderApiProviders);
 
 $('apiProviderList').addEventListener('click', async (ev) => {
   const editId = ev.target.getAttribute('data-ap-edit');
