@@ -498,6 +498,9 @@
         <h1><span id="viewTitle">Server &amp; model</span>
           <small>Dashboard admin privat</small></h1>
         <div class="top-actions">
+          <span id="adminClock" class="mono"
+                style="font-size:12px;color:var(--muted);align-self:center"
+                title="Waktu server lokal browser">--:--:--</span>
           <button id="refreshView">Refresh</button>
           <button id="menuToggle" class="menu-toggle" type="button"
             aria-controls="adminNav" aria-expanded="false"
@@ -1194,11 +1197,11 @@ async with aiohttp.ClientSession() as session:<br>
           <thead>
             <tr>
               <th>Waktu</th><th>Akun</th><th>Model</th>
-              <th>Pemakaian</th><th>Mode</th>
+              <th>Pemakaian</th><th>Mode</th><th>Status</th>
             </tr>
           </thead>
           <tbody id="usageLogRows">
-            <tr><td colspan="5" style="color:var(--muted)">Belum ada pemakaian.</td></tr>
+            <tr><td colspan="6" style="color:var(--muted)">Belum ada pemakaian.</td></tr>
           </tbody>
         </table>
       </div>
@@ -1500,6 +1503,18 @@ async with aiohttp.ClientSession() as session:<br>
 <script>
 'use strict';
 const $ = (id) => document.getElementById(id);
+
+// Jam real-time di header dashboard.
+function tickAdminClock() {
+  const el = $('adminClock');
+  if (el) {
+    el.textContent = new Date().toLocaleTimeString('id-ID', {
+      hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'
+    });
+  }
+}
+tickAdminClock();
+setInterval(tickAdminClock, 1000);
 let adminKey = sessionStorage.getItem('pb_admin_key') || '';
 let config = null;
 
@@ -1637,6 +1652,16 @@ function escapeHtml(s) {
   }[c]));
 }
 function escapeAttr(s) { return escapeHtml(s); }
+
+// Baris log internal (system_deb / system-debug / system debug) disembunyikan
+// dari semua tabel log — bukan log pemakaian pengguna.
+function isHiddenLog(entry) {
+  try {
+    return /system[\s_-]*deb/i.test(JSON.stringify(entry || {}));
+  } catch (_) {
+    return false;
+  }
+}
 
 // ─── Plans: paket berbayar + ACC pembayaran + pesanan ───────────────────
 let ordersFilter = 'pending';
@@ -1960,7 +1985,7 @@ function renderOrderLogs(orders) {
 async function loadOrderLogs() {
   try {
     const data = await api('GET', '/api/admin/plan-orders?status=paid');
-    const all = data.orders || [];
+    const all = (data.orders || []).filter((o) => !isHiddenLog(o));
     const q = ($('orderLogSearch').value || '').trim().toLowerCase();
     const orders = q
       ? all.filter((o) => [o.accountName, o.accountDiscordId, o.accountId,
@@ -2055,6 +2080,25 @@ let serverModels = [];
 let modelStats = {};
 let managerTimer = null;
 let usageTimer = null;
+let logTimer = null;
+let logsRefreshing = false;
+
+// Semua tabel log di dashboard diperbarui otomatis (real-time).
+async function refreshLogsLive() {
+  if (logsRefreshing || !adminKey) return;
+  logsRefreshing = true;
+  try {
+    await Promise.all([
+      loadUsageLogs(),
+      loadApiKeyLogs(),
+      loadDeviceLogs(),
+      loadOrderLogs(),
+    ]);
+  } catch (_) {
+  } finally {
+    logsRefreshing = false;
+  }
+}
 // serverId -> { ok, servers, error } dari daemon manager VPS tsb.
 const managerCache = {};
 const managerLogsOpen = {};
@@ -2366,6 +2410,9 @@ async function showApp() {
   // Status token/kredit per akun diperbarui otomatis (live).
   if (usageTimer) clearInterval(usageTimer);
   usageTimer = setInterval(() => refreshAccountsAndUsage(), 15000);
+  // Log pemakaian (sukses + gagal), API key, perangkat & ACC — live.
+  if (logTimer) clearInterval(logTimer);
+  logTimer = setInterval(() => refreshLogsLive(), 5000);
 }
 
 document.querySelectorAll('.nav-item').forEach((btn) => {
@@ -4225,7 +4272,7 @@ $('apiProviderList').addEventListener('click', async (ev) => {
 async function loadApiKeyLogs() {
   try {
     const data = await api('GET', '/api/admin/api-key-logs');
-    const all = data.logs || [];
+    const all = (data.logs || []).filter((l) => !isHiddenLog(l));
     const q = ($('apiKeyLogSearch').value || '').trim().toLowerCase();
     const logs = q
       ? all.filter((l) => [l.accountId, l.accountName, l.action, l.keyPrefix]
@@ -4242,7 +4289,8 @@ async function loadApiKeyLogs() {
     // Semua baris dirender; tinggi tabel dibatasi CSS (10 baris) + scroll.
     $('apiKeyLogRows').innerHTML = logs.slice(0, 500).map((l) => {
       const d = new Date(l.timestamp);
-      const ts = d.toLocaleString('id-ID');
+      const ts = d.toLocaleDateString('id-ID') + ' ' +
+        d.toLocaleTimeString('id-ID', { hour12: false });
       return '<tr>' +
         '<td>' + escapeHtml(ts) + '</td>' +
         '<td>' + escapeHtml(l.accountName || l.accountId || '') + '</td>' +
@@ -4296,7 +4344,7 @@ $('clearApiKeyLogs').addEventListener('click', async () => {
 async function loadUsageLogs() {
   try {
     const data = await api('GET', '/api/admin/usage-logs');
-    const all = data.logs || [];
+    const all = (data.logs || []).filter((l) => !isHiddenLog(l));
     const q = ($('usageLogSearch').value || '').trim().toLowerCase();
     const logs = q
       ? all.filter((l) => [l.accountName, l.accountId, l.modelName, l.modelId]
@@ -4305,7 +4353,7 @@ async function loadUsageLogs() {
       : all;
     if (!logs.length) {
       $('usageLogRows').innerHTML =
-        '<tr><td colspan="5" style="color:var(--muted)">' +
+        '<tr><td colspan="6" style="color:var(--muted)">' +
         (all.length ? 'Tidak ada pemakaian yang cocok.' : 'Belum ada pemakaian.') +
         '</td></tr>';
       return;
@@ -4313,12 +4361,23 @@ async function loadUsageLogs() {
     // Semua baris dirender; tinggi tabel dibatasi CSS (10 baris) + scroll.
     $('usageLogRows').innerHTML = logs.slice(0, 500).map((l) => {
       const d = new Date(l.timestamp);
-      const ts = d.toLocaleString('id-ID');
+      const ts = d.toLocaleDateString('id-ID') + ' ' +
+        d.toLocaleTimeString('id-ID', { hour12: false });
       // Tampilkan SATU jenis pemakaian sesuai mode: token ATAU kredit.
       const isCredit = l.mode === 'credit';
       const usage = isCredit
         ? fmtCredit(l.credits || 0)
         : fmtInt(l.tokens || 0) + ' token';
+      const failed = l.ok === false;
+      const partial = l.partial === true && !failed;
+      const statusLabel = failed ? 'Gagal' : (partial ? 'Parsial' : 'Sukses');
+      const statusClass = failed ? 'banned' : (partial ? 'info' : 'active');
+      const detail = [
+        l.status ? 'status ' + l.status : '',
+        l.error || '',
+        l.finishReason ? 'finish_reason: ' + l.finishReason : '',
+        l.sentMaxTokens ? 'sent_max_tokens: ' + l.sentMaxTokens : '',
+      ].filter(Boolean).join(' · ');
       return '<tr>' +
         '<td>' + escapeHtml(ts) + '</td>' +
         '<td>' + escapeHtml(l.accountName || l.accountId || '') + '</td>' +
@@ -4326,6 +4385,10 @@ async function loadUsageLogs() {
         '<td class="mono">' + usage + '</td>' +
         '<td><span class="pill ' + (isCredit ? 'info' : 'active') +
           '">' + escapeHtml(l.mode || 'token') + '</span></td>' +
+        '<td><span class="pill ' + statusClass + '" title="' +
+          escapeAttr(detail) + '">' + statusLabel + '</span>' +
+          (detail ? '<div class="hint" style="margin:0;font-size:11px">' +
+            escapeHtml(detail) + '</div>' : '') + '</td>' +
       '</tr>';
     }).join('');
     setStatus($('usageLogStatus'), logs.length + ' pemakaian' +
@@ -4368,7 +4431,7 @@ function deviceHardwareText(l) {
 async function loadDeviceLogs() {
   try {
     const data = await api('GET', '/api/admin/device-logs');
-    const all = data.logs || [];
+    const all = (data.logs || []).filter((l) => !isHiddenLog(l));
     const q = ($('deviceLogSearch').value || '').trim().toLowerCase();
     const logs = q
       ? all.filter((l) => [
@@ -4389,7 +4452,8 @@ async function loadDeviceLogs() {
     // Semua baris dirender; tinggi tabel dibatasi CSS (10 baris) + scroll.
     $('deviceLogRows').innerHTML = logs.slice(0, 500).map((l) => {
       const d = new Date(Number(l.lastSeen) || 0);
-      const ts = d.toLocaleString('id-ID');
+      const ts = d.toLocaleDateString('id-ID') + ' ' +
+        d.toLocaleTimeString('id-ID', { hour12: false });
       const app = String(l.app || 'web').toLowerCase();
       const appLabel = app === 'desktop' ? 'Desktop'
         : (app === 'web' ? 'Web' : (l.app || '—'));
